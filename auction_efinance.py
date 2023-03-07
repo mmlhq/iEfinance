@@ -43,12 +43,21 @@ if isTradeday == '1':  # 如果是交易日则执行
 
     insert_auction_sql = "insert into auction(code,auction_date,auction_price,auction_gain) values('%s','%s','%f','%f')"
     cur_insert_auction = cnx.cursor()
-    for row in df.itertuples():
-        if row.股票代码 not in exist_code_list and row.涨跌幅 != '-' and row.最新价 != '-':
-            if float(row.涨跌幅)>9 :
-                # 写入数据库
-                cur_insert_auction.execute(insert_auction_sql%(row.股票代码,datetime.now(),float(row.最新价),float(row.涨跌幅)))
-                cnx.commit()
+
+    before_time = '13:00:00'
+    dtime = datetime.now()
+    after_time = datetime.now().strftime("%H:%M:%S")
+    count = 0
+    while after_time < before_time:
+        for row in df.itertuples():
+            if row.股票代码 not in exist_code_list and row.涨跌幅 != '-' and row.最新价 != '-':
+                if float(row.涨跌幅)>9 :
+                    # 写入数据库
+                    cur_insert_auction.execute(insert_auction_sql%(row.股票代码,datetime.now(),float(row.最新价),float(row.涨跌幅)))
+                    cnx.commit()
+        after_time = datetime.now().strftime("%H:%M:%S")
+        count += 1
+        print(count)
 
 cur_insert_auction.close()
 cnx.close()
