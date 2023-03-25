@@ -145,8 +145,8 @@ def update_trade_status():
 
 def dojob():
     scheduler = BlockingScheduler()
-    scheduler.add_job(update_index, 'cron', hour=15, minute=8)
-    scheduler.add_job(update_stock_basic, 'cron', hour=0, minute=35)
+    scheduler.add_job(update_index, 'cron', hour=9, minute=40)
+    scheduler.add_job(update_stock_basic, 'cron', hour=22, minute=00)
     scheduler.add_job(update_trade_status, 'cron', hour=12, minute=00)
     scheduler.start()
 
