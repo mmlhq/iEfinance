@@ -106,10 +106,48 @@ def update_stock_basic():
     bs.logout()
 
 
+def update_trade_status():
+    lg = bs.login()
+
+    today = datetime.today().date()
+    rs = bs.query_trade_dates(start_date=today)
+    data_list = []
+    while (rs.error_code == '0') & rs.next():
+        data_list.append(rs.get_row_data())
+    isTradeday = data_list[0][1]
+
+    if isTradeday == '1':
+        # 连接本地数据库
+        with open("config/config.json", encoding="utf-8") as f:
+            cfg = json.load(f)
+        info = cfg["mysql"]
+        cnx = pymysql.connect(user=info["user"], password=info["password"], host=info["host"], database=info["database"])
+        cur_index = cnx.cursor()
+        index_trade_status_sql = "select code,tradeStatus from tdx.index;"
+        cur_index.execute(index_trade_status_sql)
+        tdx_indexs = cur_index.fetchall()  # 元组项的元组（（code,tradeStatus），...
+        update_sql = "update tdx.index set tradeStatus='%s' where code='%s'"
+        rs = bs.query_all_stock()  # 查询交易状态,缺省是当前时间
+        while (rs.error_code == '0') & rs.next():
+            rs_item = rs.get_row_data()
+            rs_item_code = rs_item[0]
+            rs_item_status = rs_item[1]
+            if rs_item_code[:6] == 'sz.399' or rs_item_code[:6] == 'sh.000':
+                continue
+            if (rs_item_code[3:], rs_item_status) not in tdx_indexs:
+                cur_index.execute(update_sql % (rs_item_status, rs_item_code[3:]))
+                cnx.commit()
+        cur_index.close()
+        cnx.close()
+
+    lg = bs.logout()
+
+
 def dojob():
     scheduler = BlockingScheduler()
     scheduler.add_job(update_index, 'cron', hour=15, minute=8)
-    scheduler.add_job(update_stock_basic, 'cron', hour=0, minute=32)
+    scheduler.add_job(update_stock_basic, 'cron', hour=0, minute=35)
+    scheduler.add_job(update_trade_status, 'cron', hour=12, minute=00)
     scheduler.start()
 
 
