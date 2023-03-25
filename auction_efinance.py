@@ -9,9 +9,9 @@ import efinance as ef
 from datetime import datetime
 from apscheduler.schedulers.blocking import BlockingScheduler
 
+
 def update_data():
     df = ef.stock.get_realtime_quotes()
-    print(df.columns)
 
     # 取出数据库当天的股票代码
     today = datetime.today().date()
@@ -27,7 +27,7 @@ def update_data():
     while (rs.error_code == '0') & rs.next():
         data_list.append(rs.get_row_data())
 
-    isTradeday = data_list[0][1]
+    istradeday = data_list[0][1]
 
     exist_code_list = []
     if isTradeday == '1':  # 如果是交易日则执行
