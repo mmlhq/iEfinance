@@ -11,7 +11,7 @@ url = "http://quote.eastmoney.com/center/api/sidemenu.json"
 headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, "
                                  "like Gecko) Chrome/104.0.0.0 Safari/537.36"}
 
-response = requests.get(url=url,headers=headers)
+response = requests.get(url=url, headers=headers)
 
 # with open(r"money.html","wb") as f:
 #     f.write(response.content)
@@ -35,7 +35,7 @@ boards = datas[5]["next"][2]["next"]
 for board in boards:
     # 检测board是否在tdx.boards中，如果不在则添加
     if tuple([board["title"]]) not in tdx_boards:
-        cur_boards.execute(cur_boards_insert%(board['key'],board['title']))
+        cur_boards.execute(cur_boards_insert % (board['key'], board['title']))
 
 cnx.commit()
 cnx.close()

@@ -1,4 +1,4 @@
-#-*- coding: UTF-8 -*-
+# -*- coding: UTF-8 -*-
 # 爬取东方财富网的概念信息，写入tdx.index2的concept列
 
 import re
@@ -36,7 +36,7 @@ params = {
     '_': '1674225318158'
 }
 
-response = requests.get(url=url,headers=headers,params=params)
+response = requests.get(url=url, headers=headers, params=params)
 msg = response.content.decode()
 datas = re.findall('jQuery.+\((.+)\)', msg)
 
@@ -44,9 +44,9 @@ cur_concept_insert = "insert into concept(`key`,`title`) values('%s','%s');"
 dict_datas = json.loads(datas[0])
 concepts = dict_datas["data"]["diff"]
 for concept in concepts:
-    # 检测board是否在tdx.boards中，如果不在则添加
-    if concept["f14"] not in tdx_concept:
-        cur_concept.execute(cur_concept_insert%(concept['f12'],concept['f14']))
+    # 检测concept是否在tdx.concepts中，如果不在则添加
+    if tuple([concept["f14"]]) not in tdx_concept:
+        cur_concept.execute(cur_concept_insert % (concept['f12'], concept['f14']))
 
 cnx.commit()
 cnx.close()

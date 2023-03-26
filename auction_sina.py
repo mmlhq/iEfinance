@@ -12,6 +12,7 @@ import re
 import baostock as bs
 from apscheduler.schedulers.blocking import BlockingScheduler
 
+
 def import_data():
     today = datetime.date.today()
 

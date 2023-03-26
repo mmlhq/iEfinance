@@ -8,26 +8,24 @@ from datetime import datetime
 from apscheduler.schedulers.blocking import BlockingScheduler
 import json
 
-def import_data():
-# 登陆网站系统
+def update_balance():
+    # 登陆网站系统
     lg = bs.login()
     # 显示登陆返回信息
-    print('login respond error_code:'+lg.error_code)
-    print('login respond  error_msg:'+lg.error_msg)
     with open("config/config.json",encoding="utf-8") as f:
         cfg = json.load(f)
     info = cfg["mysql"]
-    cnx = pymysql.connect(user=info["user"],password=info["password"],host=info["host"],database=info["database"])
+    cnx = pymysql.connect(user=info["user"], password=info["password"], host=info["host"], database=info["database"])
     cur_index = cnx.cursor()
     cur_index_sql = "select code, balance from tdx.index2;"
     cur_index.execute(cur_index_sql)
-    code_item_list = cur_index.fetchall() # 财务更新日期元组项的元组（（code,balance），....）
+    code_item_list = cur_index.fetchall()  # 财务更新日期元组项的元组（（code,balance），....）
     cur_blance = cnx.cursor()
     current_time = time.localtime(time.time())
-    current_quarter = (current_time.tm_mon - 1) // 3 + 1  #当前日期的季度
-    balance_head = ['code','pubDate','statDate','currentRatio','quickRatio','cashRatio','YOYLiability','liabilityToAsset','assetToEquity']
-    count = 0  #计数
-    current_year = datetime.now().year #当前年份
+    current_quarter = (current_time.tm_mon - 1) // 3 + 1  # 当前日期的季度
+    balance_head = ['code', 'pubDate', 'statDate', 'currentRatio', 'quickRatio', 'cashRatio', 'YOYLiability', 'liabilityToAsset', 'assetToEquity']
+    count = 0  # 计数
+    current_year = datetime.now().year  # 当前年份
     for code_item in code_item_list:
         for year in range(current_year-1,current_year+1):
             for quarter in range(1,5):
@@ -68,7 +66,7 @@ def import_data():
 
 def dojob():
     scheduler = BlockingScheduler()
-    scheduler.add_job(import_data,'cron',hour=16,minute=18)
+    scheduler.add_job(update_balance, 'cron', hour=16, minute=18)
     scheduler.start()
 
 dojob()
