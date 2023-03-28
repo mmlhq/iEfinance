@@ -1,4 +1,4 @@
-#-*- coding: UTF-8 -*-
+# -*- coding: UTF-8 -*-
 # 更新股票中tdx.balance表信息
 
 import baostock as bs
@@ -21,6 +21,25 @@ def combine(code):
             return
 
 
+def convert_case(match_obj):
+    if match_obj.group(1) is not None:
+        return re.sub("'", "`", match_obj.group(1))
+
+
+def caculate_score(target, value):
+    with open("config/config.json", encoding="utf-8") as f:
+        cfg = json.load(f)
+    info = cfg["mysql"]
+    cnx = pymysql.connect(user=info["user"], password=info["password"], host=info["host"], database=info["database"])
+    cur_level = cnx.cursor()
+    select_score_sql = f"select score from level where {value}<=high limit 1;"
+    cur_level.execute(select_score_sql)
+    score = cur_level.fetchone()
+    cur_level.close()
+    cnx.close()
+    return float(score[0])
+
+
 def update_balance():
     # 登陆网站系统
     lg = bs.login()
@@ -34,11 +53,11 @@ def update_balance():
     cur_index.execute(cur_index_sql)
     tdx_indexs = cur_index.fetchall()
     month = datetime.now().date().month  # 当前月
-    year = datetime.now().date().year    # 当前年
+    year = datetime.now().date().year  # 当前年
 
-    quarter = ((month - 1) // 3)+1
+    quarter = ((month - 1) // 3) + 1
     balance_table_head = ['code', 'pubDate', 'statDate', 'currentRatio', 'quickRatio', 'cashRatio', 'YOYLiability',
-                    'liabilityToAsset', 'assetToEquity']
+                          'liabilityToAsset', 'assetToEquity']
     quarterDate = ['-03-31', '-06-30', '-09-30', '-12-31']
 
     cur_balance = cnx.cursor()
@@ -51,7 +70,7 @@ def update_balance():
             year -= 1  # 上一年
         for index in tdx_indexs:
             code = combine(index[0])
-            statDate = str(year) + quarterDate[quarter-1]
+            statDate = str(year) + quarterDate[quarter - 1]
             cur_balance_sql = f"select code,statDate from tdx.balance where code='{code}' and statDate='{statDate}';"
             cur_balance.execute(cur_balance_sql)
             findinfo = cur_balance.fetchone()
@@ -59,18 +78,17 @@ def update_balance():
                 rs_balance = bs.query_balance_data(code=code, year=year, quarter=quarter)
                 while (rs_balance.error_code == '0') & rs_balance.next():
                     balance_list = rs_balance.get_row_data()
-                    d1 = zip(balance_table_head, balance_list)
-                    mydict = dict(d1)
-                    insert_sql = "INSERT INTO balance("
-                    value_sql = " VALUES("
-                    value_list = []
-                    for bitem in range(len(balance_list)):
-                        if balance_list[bitem] != '':
-                            insert_sql += balance_table_head[bitem]+','
-                            value_sql += "'%s',"
-                            value_list.append(balance_list[bitem])
-                    cur_balance_insert = re.sub(',$', ')', insert_sql) + re.sub(',$', ')', value_sql)
-                    cur_balance.execute(cur_balance_insert % tuple(value_list))
+                    dict_b = dict(zip(balance_table_head, balance_list))
+                    value = 0
+                    if dict_b['assetToEquity'] != '':
+                        value = float(dict_b['assetToEquity'])
+                    score = caculate_score('balance', value)
+                    insert_str = re.sub("\[|\]", "",
+                                        f"INSERT INTO balance({[k for (k, v) in dict_b.items() if v != '']},'score') " \
+                                        f"values{[v for (k, v) in dict_b.items() if v != ''],score};")
+                    insert_sql = re.sub(r"(\('.*'\) )", convert_case, insert_str)
+
+                    cur_balance.execute(insert_sql)
                     cnx.commit()
                     balance_list.clear()
             else:
@@ -82,6 +100,7 @@ def update_balance():
     cnx.close()
     # 登出系统
     bs.logout()
+
 
 # def dojob():
 #     scheduler = BlockingScheduler()
