@@ -27,7 +27,7 @@ def update_data():
     while (rs.error_code == '0') & rs.next():
         data_list.append(rs.get_row_data())
 
-    istradeday = data_list[0][1]
+    isTradeday = data_list[0][1]
 
     exist_code_list = []
     if isTradeday == '1':  # 如果是交易日则执行
@@ -35,7 +35,7 @@ def update_data():
             cfg = json.load(f)
         info = cfg["mysql"]
 
-        limit_time = '09:30:00'
+        limit_time = '13:30:00'
         dtime = datetime.now()
         now_time = datetime.now().strftime("%H:%M:%S")
         count = 0
@@ -70,9 +70,11 @@ def update_data():
 
 
 def dojob():
-    scheduler = BlockingScheduler()
+    scheduler = BlockingScheduler(timezone="Asia/Shanghai")
     scheduler.add_job(update_data, 'cron', hour=9, minute=15)
     scheduler.start()
 
 
-dojob()
+#dojob()
+
+update_data()
