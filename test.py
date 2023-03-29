@@ -79,10 +79,10 @@ def update_balance():
                 while (rs_balance.error_code == '0') & rs_balance.next():
                     balance_list = rs_balance.get_row_data()
                     dict_b = dict(zip(balance_table_head, balance_list))
-                    value = 0
+                    assetToEquity = 2
                     if dict_b['assetToEquity'] != '':
-                        value = float(dict_b['assetToEquity'])
-                    score = caculate_score('balance', value)
+                        assetToEquity = float(dict_b['assetToEquity'])
+                    score = caculate_score('balance', assetToEquity)
                     insert_str = re.sub("\[|\]", "",
                                         f"INSERT INTO balance({[k for (k, v) in dict_b.items() if v != '']},'score') " \
                                         f"values{[v for (k, v) in dict_b.items() if v != ''],score};")

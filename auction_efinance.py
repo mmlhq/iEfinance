@@ -4,6 +4,7 @@
 import time
 import json
 import pymysql
+import re
 import baostock as bs
 import efinance as ef
 from datetime import datetime
@@ -35,7 +36,7 @@ def update_data():
             cfg = json.load(f)
         info = cfg["mysql"]
 
-        limit_time = '13:30:00'
+        limit_time = '09:30:00'
         dtime = datetime.now()
         now_time = datetime.now().strftime("%H:%M:%S")
         count = 0
@@ -49,19 +50,19 @@ def update_data():
             for item in exist_codes:
                 exist_code_list.append(item[0])
 
-            insert_auction_sql = "insert into auction(code,auction_date,auction_price,auction_gain) values('%s','%s'," \
-                                 "'%f','%f')"
+            tvalue = []
             cur_insert_auction = cnx.cursor()
 
             for row in df.itertuples():
                 if row.股票代码 not in exist_code_list and row.涨跌幅 != '-' and row.最新价 != '-':
-                    if float(row.涨跌幅)>9 :
-                        # 写入数据库
-                        cur_insert_auction.execute(insert_auction_sql%(row.股票代码,datetime.now(),float(row.最新价),float(row.涨跌幅)))
-                        cnx.commit()
+                    if float(row.涨跌幅) > 9:
+                        tvalue.append((row.股票代码, datetime.now(), float(row.最新价), float(row.涨跌幅)))
+
+            insert_auction_sql = re.sub("\[|\]","",f"insert into auction(code,auction_date,auction_price,auction_gain) values{[ x for x in tvalue]}")
+            # 写入数据库
+            cur_insert_auction.execute(insert_auction_sql)
+            cnx.commit()
             after_time = datetime.now().strftime("%H:%M:%S")
-            count += 1
-            print(count)
 
             cur_insert_auction.close()
             cnx.close()
@@ -75,6 +76,6 @@ def dojob():
     scheduler.start()
 
 
-#dojob()
+dojob()
 
-update_data()
+# update_data()
