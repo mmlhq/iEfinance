@@ -32,7 +32,7 @@ def caculate_score(target, value):
     info = cfg["mysql"]
     cnx = pymysql.connect(user=info["user"], password=info["password"], host=info["host"], database=info["database"])
     cur_level = cnx.cursor()
-    select_score_sql = f"select score from level where {value}<=high limit 1;"
+    select_score_sql = f"select score from level where target ='{target}' and {value}<=high limit 1;"
     cur_level.execute(select_score_sql)
     score = cur_level.fetchone()
     cur_level.close()
@@ -79,7 +79,7 @@ def update_balance():
                 while (rs_balance.error_code == '0') & rs_balance.next():
                     balance_list = rs_balance.get_row_data()
                     dict_b = dict(zip(balance_table_head, balance_list))
-                    assetToEquity = 2
+                    assetToEquity = 2    #  当查询不到assetToEquity值时，取的缺省值
                     if dict_b['assetToEquity'] != '':
                         assetToEquity = float(dict_b['assetToEquity'])
                     score = caculate_score('balance', assetToEquity)
@@ -102,9 +102,71 @@ def update_balance():
     bs.logout()
 
 
+def update_growth():
+    # 登陆网站系统
+    lg = bs.login()
+
+    with open("config/config.json", encoding="utf-8") as f:
+        cfg = json.load(f)
+    info = cfg["mysql"]
+    cnx = pymysql.connect(user=info["user"], password=info["password"], host=info["host"], database=info["database"])
+    cur_index = cnx.cursor()
+    cur_index_sql = "select code from tdx.index;"
+    cur_index.execute(cur_index_sql)
+    tdx_indexs = cur_index.fetchall()
+    month = datetime.now().date().month  # 当前月
+    year = datetime.now().date().year    # 当前年
+
+    quarter = ((month - 1) // 3) + 1
+    growth_head = ['code', 'pubDate', 'statDate', 'YOYEquity', 'YOYAsset', 'YOYNI', 'YOYEPSBasic', 'YOYPNI', 'year', 'quarter']
+    quarterDate = ['-03-31', '-06-30', '-09-30', '-12-31']
+
+    cur_growth = cnx.cursor()
+
+    times = 3
+    while times > 0:  # 向前找3个季度
+        quarter -= 1
+        if quarter == 0:
+            quarter = 4  #
+            year -= 1  # 上一年
+        for index in tdx_indexs:
+            code = combine(index[0])
+            statDate = str(year) + quarterDate[quarter - 1]
+            cur_growth_sql = f"select code,statDate from tdx.growth where code='{code}' and statDate='{statDate}';"
+            cur_growth.execute(cur_growth_sql)
+            findinfo = cur_growth.fetchone()
+            if findinfo is None:  # 數據庫中還沒有該數據，寫入數據庫
+                rs_growth = bs.query_growth_data(code=code, year=year, quarter=quarter)
+                while (rs_growth.error_code == '0') & rs_growth.next():
+                    growth_list = rs_growth.get_row_data()
+                    dict_g = dict(zip(growth_head, growth_list))
+                    YOYNI = 0     #  净利润同比增长，当查询不到YOYNI值时，取的缺省值
+                    if dict_g['YOYNI'] != '':
+                        YOYNI = float(dict_g['YOYNI'])
+                    score = caculate_score('growth', YOYNI)
+                    insert_str = re.sub("\[|\]", "",
+                                        f"INSERT INTO growth({[k for (k, v) in dict_g.items() if v != '']},'score') " \
+                                        f"values{[v for (k, v) in dict_g.items() if v != ''],score};")
+                    insert_sql = re.sub(r"(\('.*'\) )", convert_case, insert_str)
+
+                    cur_growth.execute(insert_sql)
+                    cnx.commit()
+                    growth_list.clear()
+            else:
+                continue
+        times -= 1
+
+    cur_index.close()
+    cur_growth.close()
+    cnx.close()
+    # 登出系统
+    bs.logout()
+
 def dojob():
     scheduler = BlockingScheduler()
     scheduler.add_job(update_balance, 'cron', hour=17, minute=8)
+    scheduler.add_job(update_growth, 'cron', hour=18, minute=8)
     scheduler.start()
 
-dojob()
+# dojob()
+update_growth()
