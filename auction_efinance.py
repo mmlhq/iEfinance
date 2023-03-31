@@ -18,16 +18,11 @@ def update_data():
     today = datetime.today().date()
 
     lg = bs.login()
-    print('login respond error_code:' + lg.error_code)
-    print('login respond  error_msg:' + lg.error_msg)
     rs = bs.query_trade_dates(start_date=today)
-    print('query_trade_dates respond error_code:' + rs.error_code)
-    print('query_trade_dates respond  error_msg:' + rs.error_msg)
 
     data_list = []
     while (rs.error_code == '0') & rs.next():
         data_list.append(rs.get_row_data())
-
     isTradeday = data_list[0][1]
 
     exist_code_list = []
@@ -39,7 +34,7 @@ def update_data():
         limit_time = '09:30:00'
         dtime = datetime.now()
         now_time = datetime.now().strftime("%H:%M:%S")
-        count = 0
+
         while now_time < limit_time:
             cnx = pymysql.connect(user=info["user"], password=info["password"], host=info["host"],
                                   database=info["database"])
@@ -56,12 +51,12 @@ def update_data():
             for row in df.itertuples():
                 if row.股票代码 not in exist_code_list and row.涨跌幅 != '-' and row.最新价 != '-':
                     if float(row.涨跌幅) > 9:
-                        tvalue.append((row.股票代码, datetime.now(), float(row.最新价), float(row.涨跌幅)))
-
-            insert_auction_sql = re.sub("\[|\]","",f"insert into auction(code,auction_date,auction_price,auction_gain) values{[ x for x in tvalue]}")
-            # 写入数据库
-            cur_insert_auction.execute(insert_auction_sql)
-            cnx.commit()
+                        tvalue.append((row.股票代码, str(datetime.now())[0:19], float(row.最新价), float(row.涨跌幅)))
+            if len(tvalue) != 0:
+                insert_auction_sql = re.sub("\[|\]","",f"insert into auction(code,auction_date,auction_price,auction_gain) values{[ x for x in tvalue]}") + ";"
+                # 写入数据库
+                cur_insert_auction.execute(insert_auction_sql)
+                cnx.commit()
             after_time = datetime.now().strftime("%H:%M:%S")
 
             cur_insert_auction.close()
