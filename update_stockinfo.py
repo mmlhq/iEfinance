@@ -14,48 +14,39 @@ def update_index():
     df = ef.stock.get_realtime_quotes()
     today = datetime.today().date()
 
-    lg = bs.login()
-    rs = bs.query_trade_dates(start_date=today)
-
-    data_list = []
-    while (rs.error_code == '0') & rs.next():
-        data_list.append(rs.get_row_data())
-
-    isTradeday = data_list[0][1]
-
     exist_code_list = []
-    if isTradeday == '1':  # 如果是交易日则执行
-        with open("config/config.json", encoding="utf-8") as f:
-            cfg = json.load(f)
-        info = cfg["mysql"]
-        cnx = pymysql.connect(user=info["user"], password=info["password"], host=info["host"],
-                              database=info["database"])
-        cur_tdx_index = cnx.cursor()
-        tdx_index_sql = "select right(code,6),name from tdx.index;"
-        cur_tdx_index.execute(tdx_index_sql)
-        tdx_indexs = cur_tdx_index.fetchall()  # 返回tuple的tuple
-        update_name_sql = "update tdx.index set name='%s' where code='%s';"
-        insert_code_name_sql = "insert into tdx.index(code,name) values('%s','%s');"
-        cur_update_name = cnx.cursor()
-        cur_insert_name = cnx.cursor()
 
-        for row in df.itertuples():
-            if tuple([row.股票代码, row.股票名称]) not in tdx_indexs:  # 如果不在数据库中
-                # 如果查到代码，只是名称不同，则更新名称
-                if row.股票代码 in [x[0] for x in tdx_indexs]:
-                    cur_update_name.execute(update_name_sql % (row.股票名称, row.股票代码))
-                # 两个都没有，则插入
-                else:
-                    cur_insert_name.execute(insert_code_name_sql % (row.股票代码, row.股票名称))
-            cnx.commit()
+    with open("config/config.json", encoding="utf-8") as f:
+        cfg = json.load(f)
+    info = cfg["mysql"]
+    cnx = pymysql.connect(user=info["user"], password=info["password"], host=info["host"],database=info["database"])
+    cur_tdx_index = cnx.cursor()
+    tdx_index_sql = "select code,name from tdx.index;"
+    cur_tdx_index.execute(tdx_index_sql)
+    tdx_indexs = cur_tdx_index.fetchall()  # 返回tuple的tuple
 
-        cur_tdx_index.close()
-        cur_update_name.close()
-        cur_insert_name.close()
-        cnx.close()
+    cur_update_name = cnx.cursor()
+    cur_insert_name = cnx.cursor()
 
-    lg = bs.logout()
+    for row in df.itertuples():
+        if tuple([row.股票代码, row.股票名称]) not in tdx_indexs:  # 如果不在数据库中
+            # 如果查到代码，只是名称不同，则更新名称
+            if row.股票代码 in [x[0] for x in tdx_indexs]:
+                update_name_sql = f"update tdx.index set name='{row.股票名称}' where code='{row.股票代码}';"
+                cur_update_name.execute(update_name_sql)
+            # 两个都没有，则插入
+            else:
+                insert_code_name_sql = f"insert into tdx.index(code,name) values('{row.股票代码}','{row.股票名称}');"
+                if row.股票名称[0:1] == 'N':
+                    ipoDate = str(datetime.today().date())
+                    insert_code_name_sql = f"insert into tdx.index(code,name,ipoDate) values('{row.股票代码}','{row.股票名称}','{ipoDate}');"
+                cur_insert_name.execute(insert_code_name_sql)
+        cnx.commit()
 
+    cur_tdx_index.close()
+    cur_update_name.close()
+    cur_insert_name.close()
+    cnx.close()
 
 def combine(code):
     match code[:1]:
@@ -71,9 +62,6 @@ def combine(code):
 def update_stock_basic():
     lg = bs.login()
 
-    print('login respond error_code:'+lg.error_code)
-    print('login respond  error_msg:'+lg.error_msg)
-
     with open("config/config.json", encoding="utf-8") as f:
         cfg = json.load(f)
     info = cfg["mysql"]
@@ -85,7 +73,6 @@ def update_stock_basic():
     database_index_codes = [x[0] for x in database_index_stock_basic]
 
     stock_basic_info = ['code', 'name', 'ipoDate', 'outDate', 'type', 'status']
-
     update_sql = "UPDATE  `index` SET `name`=%s,`ipoDate`=%s,`outDate`=%s,`type`=%s,`status`=%s where `code`=%s; "
 
     for code in database_index_codes:
@@ -152,3 +139,4 @@ def dojob():
 
 
 dojob()
+# update_index()

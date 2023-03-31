@@ -1,72 +1,110 @@
-#-*- coding: UTF-8 -*-
+# -*- coding: UTF-8 -*-
 # 更新股票中tdx.balance表信息
 
 import baostock as bs
 import pymysql
-import time
+import re
 from datetime import datetime
 from apscheduler.schedulers.blocking import BlockingScheduler
 import json
 
+
+def combine(code):
+    match code[:1]:
+        case '0' | '3':
+            return 'sz.' + code
+        case '6':
+            return 'sh.' + code
+        case '4' | '8':
+            return 'bj.' + code
+        case _:
+            return
+
+
+def convert_case(match_obj):
+    if match_obj.group(1) is not None:
+        return re.sub("'", "`", match_obj.group(1))
+
+
+def caculate_score(target, value):
+    with open("config/config.json", encoding="utf-8") as f:
+        cfg = json.load(f)
+    info = cfg["mysql"]
+    cnx = pymysql.connect(user=info["user"], password=info["password"], host=info["host"], database=info["database"])
+    cur_level = cnx.cursor()
+    select_score_sql = f"select score from level where {value}<=high limit 1;"
+    cur_level.execute(select_score_sql)
+    score = cur_level.fetchone()
+    cur_level.close()
+    cnx.close()
+    return float(score[0])
+
+
 def update_balance():
     # 登陆网站系统
     lg = bs.login()
-    # 显示登陆返回信息
-    with open("config/config.json",encoding="utf-8") as f:
+
+    with open("config/config.json", encoding="utf-8") as f:
         cfg = json.load(f)
     info = cfg["mysql"]
     cnx = pymysql.connect(user=info["user"], password=info["password"], host=info["host"], database=info["database"])
     cur_index = cnx.cursor()
-    cur_index_sql = "select code, balance from tdx.index2;"
+    cur_index_sql = "select code from tdx.index;"
     cur_index.execute(cur_index_sql)
-    code_item_list = cur_index.fetchall()  # 财务更新日期元组项的元组（（code,balance），....）
-    cur_blance = cnx.cursor()
-    current_time = time.localtime(time.time())
-    current_quarter = (current_time.tm_mon - 1) // 3 + 1  # 当前日期的季度
-    balance_head = ['code', 'pubDate', 'statDate', 'currentRatio', 'quickRatio', 'cashRatio', 'YOYLiability', 'liabilityToAsset', 'assetToEquity']
-    count = 0  # 计数
-    current_year = datetime.now().year  # 当前年份
-    for code_item in code_item_list:
-        for year in range(current_year-1,current_year+1):
-            for quarter in range(1,5):
-                code = code_item[0]
-                cur_blance_sql = "select code,year,quarter from tdx.balance where code='%s' and year='%d' and quarter='%d';"%(code,year, quarter)
-                # 查看数据库是否已有该数据
-                cur_blance.execute(cur_blance_sql)
-                findinfo = cur_blance.fetchone()
-                if findinfo is None:  # 數據庫中還沒有該數據，寫入數據庫
-                    rs_balance = bs.query_balance_data(code=code, year=year, quarter= quarter)
-                    while (rs_balance.error_code == '0') & rs_balance.next():
-                        balance_list = rs_balance.get_row_data()
-                        insert_sql = "INSERT INTO balance("
-                        value_sql = "VALUES("
-                        value_list = []
-                        for index in range(len(balance_list)):
-                            if balance_list[index] != '':
-                                insert_sql += balance_head[index]+','
-                                value_sql += "'%s',"
-                                value_list.append(balance_list[index])
-                        insert_sql += 'year,quarter) '
-                        value_sql += "'%s','%s')"
-                        value_list.append(year)
-                        value_list.append(quarter)
-                        tuple_value = tuple(value_list)
-                        cur_balance_insert = insert_sql + value_sql
-                        cur_blance.execute(cur_balance_insert % tuple_value)
-                        cnx.commit()
-                        count += 1
-                        balance_list.clear()
-                else:
-                    continue
+    tdx_indexs = cur_index.fetchall()
+    month = datetime.now().date().month  # 当前月
+    year = datetime.now().date().year  # 当前年
+
+    quarter = ((month - 1) // 3) + 1
+    balance_table_head = ['code', 'pubDate', 'statDate', 'currentRatio', 'quickRatio', 'cashRatio', 'YOYLiability',
+                          'liabilityToAsset', 'assetToEquity']
+    quarterDate = ['-03-31', '-06-30', '-09-30', '-12-31']
+
+    cur_balance = cnx.cursor()
+
+    times = 3
+    while times > 0:  # 向前找3个季度
+        quarter -= 1
+        if quarter == 0:
+            quarter = 4  #
+            year -= 1  # 上一年
+        for index in tdx_indexs:
+            code = combine(index[0])
+            statDate = str(year) + quarterDate[quarter - 1]
+            cur_balance_sql = f"select code,statDate from tdx.balance where code='{code}' and statDate='{statDate}';"
+            cur_balance.execute(cur_balance_sql)
+            findinfo = cur_balance.fetchone()
+            if findinfo is None:  # 數據庫中還沒有該數據，寫入數據庫
+                rs_balance = bs.query_balance_data(code=code, year=year, quarter=quarter)
+                while (rs_balance.error_code == '0') & rs_balance.next():
+                    balance_list = rs_balance.get_row_data()
+                    dict_b = dict(zip(balance_table_head, balance_list))
+                    assetToEquity = 2
+                    if dict_b['assetToEquity'] != '':
+                        assetToEquity = float(dict_b['assetToEquity'])
+                    score = caculate_score('balance', assetToEquity)
+                    insert_str = re.sub("\[|\]", "",
+                                        f"INSERT INTO balance({[k for (k, v) in dict_b.items() if v != '']},'score') " \
+                                        f"values{[v for (k, v) in dict_b.items() if v != ''],score};")
+                    insert_sql = re.sub(r"(\('.*'\) )", convert_case, insert_str)
+
+                    cur_balance.execute(insert_sql)
+                    cnx.commit()
+                    balance_list.clear()
+            else:
+                continue
+        times -= 1
+
     cur_index.close()
-    cur_blance.close()
+    cur_balance.close()
     cnx.close()
     # 登出系统
     bs.logout()
 
+
 def dojob():
     scheduler = BlockingScheduler()
-    scheduler.add_job(update_balance, 'cron', hour=16, minute=18)
+    scheduler.add_job(update_balance, 'cron', hour=17, minute=8)
     scheduler.start()
 
 dojob()
