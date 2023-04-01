@@ -118,7 +118,7 @@ def update_growth():
     year = datetime.now().date().year    # 当前年
 
     quarter = ((month - 1) // 3) + 1
-    growth_head = ['code', 'pubDate', 'statDate', 'YOYEquity', 'YOYAsset', 'YOYNI', 'YOYEPSBasic', 'YOYPNI', 'year', 'quarter']
+    growth_head = ['code', 'pubDate', 'statDate', 'YOYEquity', 'YOYAsset', 'YOYNI', 'YOYEPSBasic', 'YOYPNI']
     quarterDate = ['-03-31', '-06-30', '-09-30', '-12-31']
 
     cur_growth = cnx.cursor()
@@ -162,11 +162,75 @@ def update_growth():
     # 登出系统
     bs.logout()
 
+
+def update_profit():
+    # 登陆网站系统
+    lg = bs.login()
+
+    with open("config/config.json", encoding="utf-8") as f:
+        cfg = json.load(f)
+    info = cfg["mysql"]
+    cnx = pymysql.connect(user=info["user"], password=info["password"], host=info["host"], database=info["database"])
+    cur_index = cnx.cursor()
+    cur_index_sql = "select code from tdx.index;"
+    cur_index.execute(cur_index_sql)
+    tdx_indexs = cur_index.fetchall()
+    month = datetime.now().date().month  # 当前月
+    year = datetime.now().date().year    # 当前年
+
+    quarter = ((month - 1) // 3) + 1
+    profit_head = ['code','pubDate','statDate','roeAvg','npMargin','gpMargin','netProfit','epsTTM','MBRevenue','totalShare','liqaShare']
+    quarterDate = ['-03-31', '-06-30', '-09-30', '-12-31']
+
+    cur_profit = cnx.cursor()
+
+    times = 3
+    while times > 0:  # 向前找3个季度
+        quarter -= 1
+        if quarter == 0:
+            quarter = 4  #
+            year -= 1  # 上一年
+        for index in tdx_indexs:
+            code = combine(index[0])
+            statDate = str(year) + quarterDate[quarter - 1]
+            cur_profit_sql = f"select code,statDate from tdx.profit where code='{code}' and statDate='{statDate}';"
+            cur_profit.execute(cur_profit_sql)
+            findinfo = cur_profit.fetchone()
+            if findinfo is None:  # 數據庫中還沒有該數據，寫入數據庫
+                rs_profit = bs.query_profit_data(code=code, year=year, quarter=quarter)
+                while (rs_profit.error_code == '0') & rs_profit.next():
+                    profit_list = rs_profit.get_row_data()
+                    dict_g = dict(zip(profit_head, profit_list))
+                    roeAvg = 0.08     #  净资产收益率，当查询不到roeAvg值时，取的缺省值
+                    if dict_g['roeAvg'] != '':
+                        roeAvg = float(dict_g['roeAvg'])
+                    score = caculate_score('profit', roeAvg)
+                    insert_str = re.sub("\[|\]", "",
+                                        f"INSERT INTO profit({[k for (k, v) in dict_g.items() if v != '']},'score') " \
+                                        f"values{[v for (k, v) in dict_g.items() if v != ''],score};")
+                    insert_sql = re.sub(r"(\('.*'\) )", convert_case, insert_str)
+
+                    cur_profit.execute(insert_sql)
+                    cnx.commit()
+                    profit_list.clear()
+            else:
+                continue
+        times -= 1
+
+    cur_index.close()
+    cur_profit.close()
+    cnx.close()
+    # 登出系统
+    bs.logout()
+
+
 def dojob():
-    scheduler = BlockingScheduler()
+    scheduler = BlockingScheduler(max_instance=20)
     scheduler.add_job(update_balance, 'cron', hour=17, minute=8)
     scheduler.add_job(update_growth, 'cron', hour=18, minute=8)
+    scheduler.add_job(update_profit, 'cron', hour=19, minute=8)
+
     scheduler.start()
 
 # dojob()
-update_growth()
+update_profit()

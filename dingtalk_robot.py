@@ -44,7 +44,7 @@ def test():
     print(r.json())
 
 def dojob():
-    scheduler = BlockingScheduler()
+    scheduler = BlockingScheduler(max_instance=20)
     scheduler.add_job(test,'cron',hour=8,minute=0)
     scheduler.start()
 

@@ -9,12 +9,22 @@ import efinance as ef
 from datetime import datetime
 from apscheduler.schedulers.blocking import BlockingScheduler
 
+def caculate_score(target, value):
+    with open("config/config.json", encoding="utf-8") as f:
+        cfg = json.load(f)
+    info = cfg["mysql"]
+    cnx = pymysql.connect(user=info["user"], password=info["password"], host=info["host"], database=info["database"])
+    cur_level = cnx.cursor()
+    select_score_sql = f"select score from level where target ='{target}' and {value}<=high limit 1;"
+    cur_level.execute(select_score_sql)
+    score = cur_level.fetchone()
+    cur_level.close()
+    cnx.close()
+    return float(score[0])
+
 # 更新或者添加股票代码、名称
 def update_index():
     df = ef.stock.get_realtime_quotes()
-    today = datetime.today().date()
-
-    exist_code_list = []
 
     with open("config/config.json", encoding="utf-8") as f:
         cfg = json.load(f)
@@ -34,12 +44,21 @@ def update_index():
             if row.股票代码 in [x[0] for x in tdx_indexs]:
                 update_name_sql = f"update tdx.index set name='{row.股票名称}' where code='{row.股票代码}';"
                 cur_update_name.execute(update_name_sql)
-            # 两个都没有，则插入
+            # 两个都没有，则插入股票代码、名称、所属板块、概念
             else:
-                insert_code_name_sql = f"insert into tdx.index(code,name) values('{row.股票代码}','{row.股票名称}');"
+                df_concept = ef.stock.get_belong_board(row.股票代码)
+                concept = ""
+                for row in df_concept.itertuples():
+                    concept = concept + ' ' + row.板块代码
+                concept = concept.lstrip()
+                df_info = ef.stock.get_base_info(row.股票代码)
+                PER = df_info['市盈率(动)']
+                ROE = df_info['市净率']
+                board = df_info['板块编号']
+                insert_code_name_sql = f"insert into tdx.index(code,name,tradeStatus,type,status,board,concept) values('{row.股票代码}','{row.股票名称}','1','1','1','{board}','{concept}');"
                 if row.股票名称[0:1] == 'N':
                     ipoDate = str(datetime.today().date())
-                    insert_code_name_sql = f"insert into tdx.index(code,name,ipoDate) values('{row.股票代码}','{row.股票名称}','{ipoDate}');"
+                    insert_code_name_sql = f"insert into tdx.index(code,name,tradeStatus,ipoDate,type,status,board,concept,ROE,PER) values('{row.股票代码}','{row.股票名称}','1','{ipoDate}','1','1','{board}','{concept}');"
                 cur_insert_name.execute(insert_code_name_sql)
         cnx.commit()
 
@@ -58,6 +77,7 @@ def combine(code):
             return 'bj.' + code
         case _:
             return
+
 
 def update_stock_basic():
     lg = bs.login()
@@ -130,6 +150,38 @@ def update_trade_status():
     lg = bs.logout()
 
 
+def get_base_info():  # 通过efinance模块更新换手率、ROE（净资产收率率）、PER（市盈率）
+    df = ef.stock.get_realtime_quotes() # 定时在15:00时后运行
+
+    with open("config/config.json", encoding="utf-8") as f:
+        cfg = json.load(f)
+    info = cfg["mysql"]
+    cnx = pymysql.connect(user=info["user"], password=info["password"], host=info["host"], database=info["database"])
+    cur_insert = cnx.cursor()
+    cur_score = cnx.cursor()
+    for row in df.itertuples():
+        code = row.股票代码
+        date = datetime.today().date()
+        turn =  row.换手率
+        PER = row.动态市盈率
+        # insert_sql = f"insert into KPI(code,date,turn,PER) values('{code}','{date}','{turn}','{PER}')"
+        # cur_insert.execute(insert_sql)
+        turn_score = caculate_score('turn',turn)
+        PER_score = caculate_score('PER', PER)
+        index_in_score = f"select code from tdx.score where code='{code}';"
+        cur_score.execute(index_in_score)
+        xcode = cur_score.fetchone()
+        if xcode is None:
+            insert_score_sql=f"insert score(code,date,turn,PER) values('{code}','{date}','{turn_score}','{PER_score}');"
+            cur_score.execute(insert_score_sql)
+        else:
+            update_score_sql=f"update score set turn='{turn_score}',PER='{PER_score}';"
+
+
+        cnx.commit()
+    cur_insert.close()
+    cnx.close()
+
 def dojob():
     scheduler = BlockingScheduler()
     scheduler.add_job(update_index, 'cron', hour=9, minute=40)
@@ -138,5 +190,6 @@ def dojob():
     scheduler.start()
 
 
-dojob()
+# dojob()
 # update_index()
+get_base_info()
