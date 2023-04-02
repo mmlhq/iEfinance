@@ -47,6 +47,8 @@ def update_index():
                 update_name_sql = f"update tdx.index set name='{row.股票名称}' where code='{row.股票代码}';"
                 cur_update_name.execute(update_name_sql)
             # 两个都没有，则插入股票代码、名称、所属板块、概念
+            elif row.股票代码 is None:
+                continue
             else:
                 df_concept = ef.stock.get_belong_board(row.股票代码)
                 concept = ""
@@ -54,8 +56,6 @@ def update_index():
                     concept = concept + ' ' + row.板块代码
                 concept = concept.lstrip()
                 df_info = ef.stock.get_base_info(row.股票代码)
-                PER = df_info['市盈率(动)']
-                ROE = df_info['市净率']
                 board = df_info['板块编号']
                 insert_code_name_sql = f"insert into tdx.index(code,name,tradeStatus,type,status,board,concept) values('{row.股票代码}','{row.股票名称}','1','1','1','{board}','{concept}');"
                 if row.股票名称[0:1] == 'N':
@@ -193,8 +193,8 @@ def get_base_info():  # 通过efinance模块更新KPI表的换手率、PER（市
 
 def dojob():
     scheduler = BlockingScheduler(max_instance=20)
-    scheduler.add_job(update_index, 'cron', hour=21, minute=20)
-    scheduler.add_job(get_base_info, 'cron', hour=23, minute=30)
+    scheduler.add_job(update_index, 'cron', hour=21, minute=36)
+    scheduler.add_job(get_base_info, 'cron', hour=21, minute=50)
     scheduler.add_job(update_stock_basic, 'cron', hour=0, minute=30)
     scheduler.add_job(update_trade_status, 'cron', hour=1, minute=00)
     scheduler.start()
