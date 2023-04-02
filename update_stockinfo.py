@@ -60,7 +60,7 @@ def update_index():
                 insert_code_name_sql = f"insert into tdx.index(code,name,tradeStatus,type,status,board,concept) values('{row.股票代码}','{row.股票名称}','1','1','1','{board}','{concept}');"
                 if row.股票名称[0:1] == 'N':
                     ipoDate = str(datetime.today().date())
-                    insert_code_name_sql = f"insert into tdx.index(code,name,tradeStatus,ipoDate,type,status,board,concept,ROE,PER) values('{row.股票代码}','{row.股票名称}','1','{ipoDate}','1','1','{board}','{concept}');"
+                    insert_code_name_sql = f"insert into tdx.index(code,name,tradeStatus,ipoDate,type,status,board,concept) values('{row.股票代码}','{row.股票名称}','1','{ipoDate}','1','1','{board}','{concept}');"
                 cur_insert_name.execute(insert_code_name_sql)
         cnx.commit()
 
@@ -152,7 +152,7 @@ def update_trade_status():
     lg = bs.logout()
 
 
-def get_base_info():  # 通过efinance模块更新换手率、ROE（净资产收率率）、PER（市盈率）
+def get_base_info():  # 通过efinance模块更新KPI表的换手率、PER（市盈率）
     np = (ef.stock.get_realtime_quotes()).to_numpy() # 定时在15:00时后运行
 
     with open("config/config.json", encoding="utf-8") as f:
@@ -191,52 +191,13 @@ def get_base_info():  # 通过efinance模块更新换手率、ROE（净资产收
     cnx.close()
 
 
-def update_index_boards():
-    with open("config/config.json", encoding="utf-8") as f:
-        cfg = json.load(f)
-    info = cfg["mysql"]
-    cnx = pymysql.connect(user=info["user"], password=info["password"], host=info["host"], database=info["database"])
-    cur_index = cnx.cursor()
-    index_sql = "select `code` from tdx.index where status = '1';"
-    cur_index.execute(index_sql)
-    tdx_indexs = cur_index.fetchall()
-    cur_concept = cnx.cursor()
-    cur_board = cnx.cursor()
-    for index in tdx_indexs:
-        df_concept = ef.stock.get_belong_board(index[0])
-        concept = ""
-        for row in df_concept.itertuples():
-            concept = concept + ' ' + row.板块代码
-        concept_all = concept.lstrip()
-        c = re.split(r'\s', concept_all, 1)
-        concept = c[1]
-        concept_sql = f"REPLACE INTO `tdx`.`index`(`code`,`concept`) VALUES('{index[0]}','{concept}');"
-        cur_concept.execute(concept_sql)
-        b = re.split(r'\s', concept_all, 1)
-        board = b[0]
-        board_sql = f"REPLACE INTO `tdx`.`index`(`code`,`board`) VALUES('{index[0]}','{board}');"
-        cur_board.execute(board_sql)
-        cnx.commit()
-
-    cur_board.close()
-    cur_concept.close()
-    cur_index.close()
-    cnx.close()
-
-
-def update_index_concept():
-    pass
-
-
 def dojob():
-    scheduler = BlockingScheduler()
-    scheduler.add_job(update_index, 'cron', hour=9, minute=40)
-    scheduler.add_job(update_stock_basic, 'cron', hour=22, minute=00)
-    scheduler.add_job(update_trade_status, 'cron', hour=12, minute=00)
+    scheduler = BlockingScheduler(max_instance=20)
+    scheduler.add_job(update_index, 'cron', hour=21, minute=20)
+    scheduler.add_job(get_base_info, 'cron', hour=23, minute=30)
+    scheduler.add_job(update_stock_basic, 'cron', hour=0, minute=30)
+    scheduler.add_job(update_trade_status, 'cron', hour=1, minute=00)
     scheduler.start()
 
 
-# dojob()
-# update_index()
-# get_base_info()
-update_index_boards()
+dojob()
