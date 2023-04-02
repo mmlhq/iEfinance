@@ -11,7 +11,7 @@ import efinance as ef
 from datetime import datetime
 from apscheduler.schedulers.blocking import BlockingScheduler
 
-def caculate_score(cnx, target, value, pd_level):
+def caculate_score(target, value, pd_level):
     pd_score = pd_level[(pd_level['target']==target) & (pd_level['high']>=value) & (pd_level['low']<value)]
 
     if pd_score.empty:
@@ -160,7 +160,6 @@ def get_base_info():  # 通过efinance模块更新换手率、ROE（净资产收
     info = cfg["mysql"]
     cnx = pymysql.connect(user=info["user"], password=info["password"], host=info["host"], database=info["database"])
     cur_score = cnx.cursor()
-    print(datetime.now())
     score_indexs_sql = f"select code from tdx.score;"
     cur_score.execute(score_indexs_sql)
     score_indexs = cur_score.fetchall()
@@ -173,11 +172,11 @@ def get_base_info():  # 通过efinance模块更新换手率、ROE（净资产收
         date = str(datetime.today().date())
         turn =  row[8]
         PER = row[10]
-        turn_score = caculate_score(cnx,'turn',turn,pd_level)
+        turn_score = caculate_score('turn',turn, pd_level)
         if PER == '-':
             PER_score = 0
         else:
-            PER_score = caculate_score(cnx,'PER', PER,pd_level)
+            PER_score = caculate_score('PER', PER, pd_level)
         replace_values.append(tuple([code,date,turn_score,PER_score]))
 
     if replace_values:
@@ -191,6 +190,44 @@ def get_base_info():  # 通过efinance模块更新换手率、ROE（净资产收
     cur_score.close()
     cnx.close()
 
+
+def update_index_boards():
+    with open("config/config.json", encoding="utf-8") as f:
+        cfg = json.load(f)
+    info = cfg["mysql"]
+    cnx = pymysql.connect(user=info["user"], password=info["password"], host=info["host"], database=info["database"])
+    cur_index = cnx.cursor()
+    index_sql = "select `code` from tdx.index where status = '1';"
+    cur_index.execute(index_sql)
+    tdx_indexs = cur_index.fetchall()
+    cur_concept = cnx.cursor()
+    cur_board = cnx.cursor()
+    for index in tdx_indexs:
+        df_concept = ef.stock.get_belong_board(index[0])
+        concept = ""
+        for row in df_concept.itertuples():
+            concept = concept + ' ' + row.板块代码
+        concept_all = concept.lstrip()
+        c = re.split(r'\s', concept_all, 1)
+        concept = c[1]
+        concept_sql = f"REPLACE INTO `tdx`.`index`(`code`,`concept`) VALUES('{index[0]}','{concept}');"
+        cur_concept.execute(concept_sql)
+        b = re.split(r'\s', concept_all, 1)
+        board = b[0]
+        board_sql = f"REPLACE INTO `tdx`.`index`(`code`,`board`) VALUES('{index[0]}','{board}');"
+        cur_board.execute(board_sql)
+        cnx.commit()
+
+    cur_board.close()
+    cur_concept.close()
+    cur_index.close()
+    cnx.close()
+
+
+def update_index_concept():
+    pass
+
+
 def dojob():
     scheduler = BlockingScheduler()
     scheduler.add_job(update_index, 'cron', hour=9, minute=40)
@@ -201,4 +238,5 @@ def dojob():
 
 # dojob()
 # update_index()
-get_base_info()
+# get_base_info()
+update_index_boards()

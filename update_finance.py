@@ -5,6 +5,8 @@ import baostock as bs
 import pymysql
 import re
 from datetime import datetime
+import pandas as pd
+import numpy as np
 from apscheduler.schedulers.blocking import BlockingScheduler
 import json
 
@@ -26,24 +28,36 @@ def convert_case(match_obj):
         return re.sub("'", "`", match_obj.group(1))
 
 
-def caculate_score(target, value):
-    with open("config/config.json", encoding="utf-8") as f:
-        cfg = json.load(f)
-    info = cfg["mysql"]
-    cnx = pymysql.connect(user=info["user"], password=info["password"], host=info["host"], database=info["database"])
-    cur_level = cnx.cursor()
-    select_score_sql = f"select score from level where target ='{target}' and {value}<=high limit 1;"
-    cur_level.execute(select_score_sql)
-    score = cur_level.fetchone()
-    cur_level.close()
-    cnx.close()
-    return float(score[0])
+# def caculate_score(target, value):
+#     with open("config/config.json", encoding="utf-8") as f:
+#         cfg = json.load(f)
+#     info = cfg["mysql"]
+#     cnx = pymysql.connect(user=info["user"], password=info["password"], host=info["host"], database=info["database"])
+#     cur_level = cnx.cursor()
+#     select_score_sql = f"select score from level where target ='{target}' and {value}<=high limit 1;"
+#     cur_level.execute(select_score_sql)
+#     score = cur_level.fetchone()
+#     cur_level.close()
+#     cnx.close()
+#     return float(score[0])
+
+def caculate_score(target, value, pd_level):
+    pd_score = pd_level[(pd_level['target']==target) & (pd_level['high']>=value) & (pd_level['low']<value)]
+    if pd_score.empty:
+        return 0
+    score = pd_score.iloc[0,4]
+    return float(score)
+
+
+def leveltable_to_df(cnx):
+    sql = "select * from tdx.level"
+    df = pd.io.sql.read_sql_query(sql,cnx)
+    return df
 
 
 def update_balance():
     # 登陆网站系统
     lg = bs.login()
-
     with open("config/config.json", encoding="utf-8") as f:
         cfg = json.load(f)
     info = cfg["mysql"]
@@ -59,40 +73,36 @@ def update_balance():
     balance_table_head = ['code', 'pubDate', 'statDate', 'currentRatio', 'quickRatio', 'cashRatio', 'YOYLiability',
                           'liabilityToAsset', 'assetToEquity']
     quarterDate = ['-03-31', '-06-30', '-09-30', '-12-31']
+    pd_level = leveltable_to_df(cnx)
+
 
     cur_balance = cnx.cursor()
-
     times = 3
     while times > 0:  # 向前找3个季度
         quarter -= 1
         if quarter == 0:
             quarter = 4  #
             year -= 1  # 上一年
+        item_list = []
         for index in tdx_indexs:
             code = combine(index[0])
             statDate = str(year) + quarterDate[quarter - 1]
-            cur_balance_sql = f"select code,statDate from tdx.balance where code='{code}' and statDate='{statDate}';"
-            cur_balance.execute(cur_balance_sql)
-            findinfo = cur_balance.fetchone()
-            if findinfo is None:  # 數據庫中還沒有該數據，寫入數據庫
-                rs_balance = bs.query_balance_data(code=code, year=year, quarter=quarter)
-                while (rs_balance.error_code == '0') & rs_balance.next():
-                    balance_list = rs_balance.get_row_data()
-                    dict_b = dict(zip(balance_table_head, balance_list))
-                    assetToEquity = 2    #  当查询不到assetToEquity值时，取的缺省值
-                    if dict_b['assetToEquity'] != '':
-                        assetToEquity = float(dict_b['assetToEquity'])
-                    score = caculate_score('balance', assetToEquity)
-                    insert_str = re.sub("\[|\]", "",
-                                        f"INSERT INTO balance({[k for (k, v) in dict_b.items() if v != '']},'score') " \
-                                        f"values{[v for (k, v) in dict_b.items() if v != ''],score};")
-                    insert_sql = re.sub(r"(\('.*'\) )", convert_case, insert_str)
 
-                    cur_balance.execute(insert_sql)
-                    cnx.commit()
-                    balance_list.clear()
-            else:
-                continue
+            ####
+
+            rs_balance = bs.query_balance_data(code=code, year=year, quarter=quarter)
+            while (rs_balance.error_code == '0') & rs_balance.next():
+                balance_list = rs_balance.get_row_data()
+                dict_b = dict(zip(balance_table_head, balance_list))
+                if dict_b['assetToEquity'] != '':
+                    assetToEquity = float(dict_b['assetToEquity'])
+                # score = caculate_score('balance', assetToEquity)
+                score = caculate_score('balance', assetToEquity, pd_level)
+                s = str(balance_list).replace('[','').replace(']','').replace("''",'null')
+                insert_str = "REPLACE INTO balance(`code`, `pubDate`, `statDate`, `currentRatio`, `quickRatio`, `cashRatio`, " \
+                             f"`YOYLiability`,`liabilityToAsset`, `assetToEquity`,`score`) VALUES({s},{score});"
+                cur_balance.execute(insert_str)
+                cnx.commit()
         times -= 1
 
     cur_index.close()
@@ -100,7 +110,6 @@ def update_balance():
     cnx.close()
     # 登出系统
     bs.logout()
-
 
 def update_growth():
     # 登陆网站系统
@@ -224,6 +233,51 @@ def update_profit():
     bs.logout()
 
 
+def update_score():
+    with open("config/config.json", encoding="utf-8") as f:
+        cfg = json.load(f)
+    info = cfg["mysql"]
+    date = datetime.today().date()
+    cnx = pymysql.connect(user=info["user"], password=info["password"], host=info["host"], database=info["database"])
+    cur_balance = cnx.cursor()
+    cur_score = cnx.cursor()
+    balance_sql = "select b.code,b.score from tdx.balance b where (b.`code`,b.statDate) in (select `code`,max(statDate) from tdx.balance group by `code`);"
+    cur_balance.execute(balance_sql)
+    balance_scores =  cur_balance.fetchall()
+    for item in balance_scores:
+        i = str(item).replace("(", "").replace(")", "")
+        replace_sql = f"REPLACE INTO score(code,balance,date) VALUES({i},'{date}');"
+        cur_score.execute(replace_sql)
+        cnx.commit()
+
+    cur_growth = cnx.cursor()
+    growth_sql = "select b.code,b.score from tdx.growth b where (b.`code`,b.statDate) in (select `code`,max(statDate) from tdx.growth group by `code`);"
+    cur_growth.execute(growth_sql)
+    growth_scores =  cur_growth.fetchall()
+    for item in growth_scores:
+        i = str(item).replace("(", "").replace(")", "")
+        replace_sql = f"REPLACE INTO score(code,growth,date) VALUES({i},'{date}');"
+        cur_score.execute(replace_sql)
+        cnx.commit()
+
+    cur_profit = cnx.cursor()
+    profit_sql = "select b.code,b.score from tdx.profit b where (b.`code`,b.statDate) in (select `code`,max(statDate) from tdx.profit group by `code`);"
+    cur_profit.execute(profit_sql)
+    profit_scores = cur_profit.fetchall()
+    for item in profit_scores:
+        i = str(item).replace("(", "").replace(")", "")
+        replace_sql = f"REPLACE INTO score(code,profit,date) VALUES({i},'{date}');"
+        cur_score.execute(replace_sql)
+        cnx.commit()
+
+
+    cur_score.close()
+    cur_balance.close()
+    cur_growth.close()
+    cur_profit.close()
+    cnx.close()
+
+
 def dojob():
     scheduler = BlockingScheduler(max_instance=20)
     scheduler.add_job(update_balance, 'cron', hour=17, minute=8)
@@ -233,4 +287,6 @@ def dojob():
     scheduler.start()
 
 # dojob()
-update_profit()
+# update_profit()
+# update_balance()
+update_score()
