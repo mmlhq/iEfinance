@@ -3,24 +3,26 @@
 
 import baostock as bs
 import re
+import pandas as pd
+import numpy as np
 import pymysql
 import json
 import efinance as ef
 from datetime import datetime
 from apscheduler.schedulers.blocking import BlockingScheduler
 
-def caculate_score(target, value):
-    with open("config/config.json", encoding="utf-8") as f:
-        cfg = json.load(f)
-    info = cfg["mysql"]
-    cnx = pymysql.connect(user=info["user"], password=info["password"], host=info["host"], database=info["database"])
-    cur_level = cnx.cursor()
-    select_score_sql = f"select score from level where target ='{target}' and {value}<=high limit 1;"
-    cur_level.execute(select_score_sql)
-    score = cur_level.fetchone()
-    cur_level.close()
-    cnx.close()
-    return float(score[0])
+def caculate_score(cnx, target, value, pd_level):
+    pd_score = pd_level[(pd_level['target']==target) & (pd_level['high']>=value) & (pd_level['low']<value)]
+
+    if pd_score.empty:
+        return 0
+    score = pd_score.iloc[0,4]
+    return float(score)
+
+def leveltable_to_df(cnx):
+    sql = "select * from tdx.level"
+    df = pd.io.sql.read_sql_query(sql,cnx)
+    return df
 
 # 更新或者添加股票代码、名称
 def update_index():
@@ -151,35 +153,42 @@ def update_trade_status():
 
 
 def get_base_info():  # 通过efinance模块更新换手率、ROE（净资产收率率）、PER（市盈率）
-    df = ef.stock.get_realtime_quotes() # 定时在15:00时后运行
+    np = (ef.stock.get_realtime_quotes()).to_numpy() # 定时在15:00时后运行
 
     with open("config/config.json", encoding="utf-8") as f:
         cfg = json.load(f)
     info = cfg["mysql"]
     cnx = pymysql.connect(user=info["user"], password=info["password"], host=info["host"], database=info["database"])
-    cur_insert = cnx.cursor()
     cur_score = cnx.cursor()
-    for row in df.itertuples():
-        code = row.股票代码
-        date = datetime.today().date()
-        turn =  row.换手率
-        PER = row.动态市盈率
-        # insert_sql = f"insert into KPI(code,date,turn,PER) values('{code}','{date}','{turn}','{PER}')"
-        # cur_insert.execute(insert_sql)
-        turn_score = caculate_score('turn',turn)
-        PER_score = caculate_score('PER', PER)
-        index_in_score = f"select code from tdx.score where code='{code}';"
-        cur_score.execute(index_in_score)
-        xcode = cur_score.fetchone()
-        if xcode is None:
-            insert_score_sql=f"insert score(code,date,turn,PER) values('{code}','{date}','{turn_score}','{PER_score}');"
-            cur_score.execute(insert_score_sql)
+    print(datetime.now())
+    score_indexs_sql = f"select code from tdx.score;"
+    cur_score.execute(score_indexs_sql)
+    score_indexs = cur_score.fetchall()
+    print(datetime.now())
+    replace_values = []
+    pd_level = leveltable_to_df(cnx)
+    print(pd_level)
+    for row in  np:  # df.itertuples():
+        code = row[0]
+        date = str(datetime.today().date())
+        turn =  row[8]
+        PER = row[10]
+        turn_score = caculate_score(cnx,'turn',turn,pd_level)
+        if PER == '-':
+            PER_score = 0
         else:
-            update_score_sql=f"update score set turn='{turn_score}',PER='{PER_score}';"
+            PER_score = caculate_score(cnx,'PER', PER,pd_level)
+        replace_values.append(tuple([code,date,turn_score,PER_score]))
 
-
+    if replace_values:
+        s = re.sub(r"\[", "", str(replace_values))
+        s =  re.sub(r"\)]", ");", s)
+        replace_values_str = f"replace into score(code,date,turn,PER) values{s}"
+        cur_score.execute(replace_values_str)
         cnx.commit()
-    cur_insert.close()
+
+    print(datetime.now())
+    cur_score.close()
     cnx.close()
 
 def dojob():
