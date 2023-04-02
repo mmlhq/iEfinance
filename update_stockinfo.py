@@ -153,50 +153,46 @@ def update_trade_status():
 
 
 def get_base_info():  # 通过efinance模块更新KPI表的换手率、PER（市盈率）
-    np = (ef.stock.get_realtime_quotes()).to_numpy() # 定时在15:00时后运行
+    np_array = (ef.stock.get_realtime_quotes()).to_numpy()  # 定时在15:00时后运行
 
     with open("config/config.json", encoding="utf-8") as f:
         cfg = json.load(f)
     info = cfg["mysql"]
     cnx = pymysql.connect(user=info["user"], password=info["password"], host=info["host"], database=info["database"])
-    cur_score = cnx.cursor()
-    score_indexs_sql = f"select code from tdx.score;"
-    cur_score.execute(score_indexs_sql)
-    score_indexs = cur_score.fetchall()
+    cur_KPI = cnx.cursor()
     print(datetime.now())
     replace_values = []
     pd_level = leveltable_to_df(cnx)
-    print(pd_level)
-    for row in  np:  # df.itertuples():
+
+    for row in np_array:
         code = row[0]
         date = str(datetime.today().date())
-        turn =  row[8]
+        turn = row[8]
         PER = row[10]
         turn_score = caculate_score('turn',turn, pd_level)
         if PER == '-':
             PER_score = 0
         else:
             PER_score = caculate_score('PER', PER, pd_level)
-        replace_values.append(tuple([code,date,turn_score,PER_score]))
+        replace_values.append(tuple([code, date, turn_score, PER_score]))
 
     if replace_values:
         s = re.sub(r"\[", "", str(replace_values))
-        s =  re.sub(r"\)]", ");", s)
-        replace_values_str = f"replace into score(code,date,turn,PER) values{s}"
-        cur_score.execute(replace_values_str)
+        s = re.sub(r"\)]", ");", s)
+        replace_values_str = f"replace into KPI(code,date,turn,PER) values{s}"
+        cur_KPI.execute(replace_values_str)
         cnx.commit()
 
-    print(datetime.now())
-    cur_score.close()
+    cur_KPI.close()
     cnx.close()
 
 
 def dojob():
     scheduler = BlockingScheduler(max_instance=20)
-    scheduler.add_job(update_index, 'cron', hour=21, minute=36)
-    scheduler.add_job(get_base_info, 'cron', hour=21, minute=50)
+    scheduler.add_job(update_index, 'cron', hour=9, minute=36)
+    scheduler.add_job(get_base_info, 'cron', hour=15, minute=5)
     scheduler.add_job(update_stock_basic, 'cron', hour=0, minute=30)
-    scheduler.add_job(update_trade_status, 'cron', hour=1, minute=00)
+    scheduler.add_job(update_trade_status, 'cron', hour=1, minute=30)
     scheduler.start()
 
 

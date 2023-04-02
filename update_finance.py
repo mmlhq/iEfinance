@@ -75,7 +75,6 @@ def update_balance():
     quarterDate = ['-03-31', '-06-30', '-09-30', '-12-31']
     pd_level = leveltable_to_df(cnx)
 
-
     cur_balance = cnx.cursor()
     times = 3
     while times > 0:  # 向前找3个季度
@@ -88,17 +87,14 @@ def update_balance():
             code = combine(index[0])
             statDate = str(year) + quarterDate[quarter - 1]
 
-            ####
-
             rs_balance = bs.query_balance_data(code=code, year=year, quarter=quarter)
             while (rs_balance.error_code == '0') & rs_balance.next():
                 balance_list = rs_balance.get_row_data()
                 dict_b = dict(zip(balance_table_head, balance_list))
                 if dict_b['assetToEquity'] != '':
                     assetToEquity = float(dict_b['assetToEquity'])
-                # score = caculate_score('balance', assetToEquity)
                 score = caculate_score('balance', assetToEquity, pd_level)
-                s = str(balance_list).replace('[','').replace(']','').replace("''",'null')
+                s = str(balance_list).replace('[', '').replace(']', '').replace("''", 'null')
                 insert_str = "REPLACE INTO balance(`code`, `pubDate`, `statDate`, `currentRatio`, `quickRatio`, `cashRatio`, " \
                              f"`YOYLiability`,`liabilityToAsset`, `assetToEquity`,`score`) VALUES({s},{score});"
                 cur_balance.execute(insert_str)
@@ -243,21 +239,23 @@ def update_score():
     cur_score = cnx.cursor()
     balance_sql = "select b.code,b.score from tdx.balance b where (b.`code`,b.statDate) in (select `code`,max(statDate) from tdx.balance group by `code`);"
     cur_balance.execute(balance_sql)
-    balance_scores =  cur_balance.fetchall()
+    balance_scores = cur_balance.fetchall()
     for item in balance_scores:
-        i = str(item).replace("(", "").replace(")", "")
-        replace_sql = f"REPLACE INTO score(code,balance,date) VALUES({i},'{date}');"
-        cur_score.execute(replace_sql)
+        code = item[0][3::]
+        score = item[1]
+        update_sql = f"UPDATE `tdx`.`score` SET balance='{score}' where `code`='{code}'; "
+        cur_score.execute(update_sql)
         cnx.commit()
 
     cur_growth = cnx.cursor()
     growth_sql = "select b.code,b.score from tdx.growth b where (b.`code`,b.statDate) in (select `code`,max(statDate) from tdx.growth group by `code`);"
     cur_growth.execute(growth_sql)
-    growth_scores =  cur_growth.fetchall()
+    growth_scores = cur_growth.fetchall()
     for item in growth_scores:
-        i = str(item).replace("(", "").replace(")", "")
-        replace_sql = f"REPLACE INTO score(code,growth,date) VALUES({i},'{date}');"
-        cur_score.execute(replace_sql)
+        code = item[0][3::]
+        score = item[1]
+        update_sql = f"UPDATE `tdx`.`score` SET growth='{score}' where `code`='{code}'; "
+        cur_score.execute(update_sql)
         cnx.commit()
 
     cur_profit = cnx.cursor()
@@ -265,11 +263,11 @@ def update_score():
     cur_profit.execute(profit_sql)
     profit_scores = cur_profit.fetchall()
     for item in profit_scores:
-        i = str(item).replace("(", "").replace(")", "")
-        replace_sql = f"REPLACE INTO score(code,profit,date) VALUES({i},'{date}');"
-        cur_score.execute(replace_sql)
+        code = item[0][3::]
+        score = item[1]
+        update_sql = f"UPDATE `tdx`.`score` SET profit='{score}' where `code`='{code}'; "
+        cur_score.execute(update_sql)
         cnx.commit()
-
 
     cur_score.close()
     cur_balance.close()
@@ -280,13 +278,13 @@ def update_score():
 
 def dojob():
     scheduler = BlockingScheduler(max_instance=20)
-    scheduler.add_job(update_balance, 'cron', hour=17, minute=8)
+    scheduler.add_job(update_balance, 'cron', hour=16, minute=8)
     scheduler.add_job(update_growth, 'cron', hour=18, minute=8)
-    scheduler.add_job(update_profit, 'cron', hour=19, minute=8)
+    scheduler.add_job(update_profit, 'cron', hour=20, minute=8)
 
     scheduler.start()
 
-# dojob()
+dojob()
 # update_profit()
 # update_balance()
-update_score()
+# update_score()
