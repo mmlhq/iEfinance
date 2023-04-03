@@ -127,7 +127,7 @@ def update_growth():
     quarterDate = ['-03-31', '-06-30', '-09-30', '-12-31']
 
     cur_growth = cnx.cursor()
-
+    pd_level = leveltable_to_df(cnx)
     times = 3
     while times > 0:  # 向前找3个季度
         quarter -= 1
@@ -148,7 +148,7 @@ def update_growth():
                     YOYNI = 0     #  净利润同比增长，当查询不到YOYNI值时，取的缺省值
                     if dict_g['YOYNI'] != '':
                         YOYNI = float(dict_g['YOYNI'])
-                    score = caculate_score('growth', YOYNI)
+                    score = caculate_score('growth', YOYNI, pd_level)
                     insert_str = re.sub("\[|\]", "",
                                         f"INSERT INTO growth({[k for (k, v) in dict_g.items() if v != '']},'score') " \
                                         f"values{[v for (k, v) in dict_g.items() if v != ''],score};")
@@ -188,7 +188,7 @@ def update_profit():
     quarterDate = ['-03-31', '-06-30', '-09-30', '-12-31']
 
     cur_profit = cnx.cursor()
-
+    pd_level = leveltable_to_df(cnx)
     times = 3
     while times > 0:  # 向前找3个季度
         quarter -= 1
@@ -209,7 +209,7 @@ def update_profit():
                     roeAvg = 0.08     #  净资产收益率，当查询不到roeAvg值时，取的缺省值
                     if dict_g['roeAvg'] != '':
                         roeAvg = float(dict_g['roeAvg'])
-                    score = caculate_score('profit', roeAvg)
+                    score = caculate_score('profit', roeAvg, pd_level)
                     insert_str = re.sub("\[|\]", "",
                                         f"INSERT INTO profit({[k for (k, v) in dict_g.items() if v != '']},'score') " \
                                         f"values{[v for (k, v) in dict_g.items() if v != ''],score};")

@@ -47,13 +47,13 @@ def update_index():
                 update_name_sql = f"update tdx.index set name='{row.股票名称}' where code='{row.股票代码}';"
                 cur_update_name.execute(update_name_sql)
             # 两个都没有，则插入股票代码、名称、所属板块、概念
-            elif row.股票代码 is None:
-                continue
             else:
                 df_concept = ef.stock.get_belong_board(row.股票代码)
+                if df_concept is None:
+                    continue
                 concept = ""
-                for row in df_concept.itertuples():
-                    concept = concept + ' ' + row.板块代码
+                for df_row in df_concept.itertuples():
+                    concept = concept + ' ' + df_row.板块代码
                 concept = concept.lstrip()
                 df_info = ef.stock.get_base_info(row.股票代码)
                 board = df_info['板块编号']
