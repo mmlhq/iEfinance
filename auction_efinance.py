@@ -31,7 +31,7 @@ def update_data():
             cfg = json.load(f)
         info = cfg["mysql"]
 
-        limit_time = '09:30:00'
+        limit_time = '12:40:00'
         dtime = datetime.now()
         now_time = datetime.now().strftime("%H:%M:%S")
 
@@ -71,6 +71,6 @@ def dojob():
     scheduler.start()
 
 
-dojob()
+#dojob()
 
-# update_data()
+update_data()
