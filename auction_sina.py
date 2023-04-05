@@ -1,28 +1,47 @@
-#-*- coding: UTF-8 -*-
-# 爬取东财网竞价（9:15-9:30）期间出现的涨幅超过8%的股票，写入tdx.auction表
-# 测试时，网站禁止访问（Forbbin),取不到数
-
+# -*- coding: UTF-8 -*-
 import datetime
+from time import sleep
 import pymysql
 import requests
 import json
 import re
-from bs4 import BeautifulSoup
-import re
+import pandas as pd
 import baostock as bs
+def combine(code):
+    match code[:1]:
+        case '0' | '3':
+            return 'sz' + code
+        case '6':
+            return 'sh' + code
+        case '4' | '8':
+            return 'bj' + code
+        case _:
+            return
 from apscheduler.schedulers.blocking import BlockingScheduler
 
+def update_auction():
+    with open("config/config.json", encoding="utf-8") as f:
+        cfg = json.load(f)
+    info = cfg["mysql"]
+    cnx = pymysql.connect(user=info["user"], password=info["password"], host=info["host"], database=info["database"])
+    cur_indexs = cnx.cursor()
+    index_sql = "select code from tdx.index;"
+    cur_indexs.execute(index_sql)
+    tdx_indexs = cur_indexs.fetchall()
 
-def import_data():
+    df = pd.DataFrame(tdx_indexs, columns=['code'])
+    code_list = [combine(x[0]) for x in df.values]
+
+    nums = 800  # 一次读取的数据
+    headers = {'Referer': 'https://finance.sina.com.cn'}
+    limit_time = '09:30:00'
+    before_time = datetime.datetime.now().strftime("%H:%M:%S")
+    cur_auction = cnx.cursor()
+    print(datetime.datetime.now())
+
     today = datetime.date.today()
-
     lg = bs.login()
-    print('login respond error_code:' + lg.error_code)
-    print('login respond  error_msg:' + lg.error_msg)
-
     rs = bs.query_trade_dates(start_date=today)
-    print('query_trade_dates respond error_code:' + rs.error_code)
-    print('query_trade_dates respond  error_msg:' + rs.error_msg)
 
     data_list = []
     while (rs.error_code == '0') & rs.next():
@@ -30,52 +49,49 @@ def import_data():
 
     isTradeday = data_list[0][1]
 
-    if isTradeday == "1":
-        headers = {'Referer': 'https://finance.sina.com.cn'}
-        # url='https://hq.sinajs.cn/list=sz002927'
+    if isTradeday != "1":
+        return
 
-        with open("config/config.json", encoding="utf-8") as f:
-            cfg = json.load(f)
-        info = cfg["mysql"]
-        cnx = pymysql.connect(user=info["user"], password=info["password"], host=info["host"],
-                              database=info["database"])
-        cur_index = cnx.cursor()
-        index_sql = "select code from tdx.index2 where type='1';"
-        cur_index.execute(index_sql)
-        database_index = cur_index.fetchall()
+    while before_time < limit_time:
+        for i in range(0, len(code_list), nums):
+            codes = re.sub(r"\[|\]|\'", "", str(code_list[i:i + nums])).replace(" ", "")
+            url = 'https://hq.sinajs.cn/list='+codes
+            file = requests.get(url=url, headers=headers)
+            # 完成返回数据的提取、判断和写入tdx操作
+            _text = re.findall(r'.*?\n', file.text)
+            for item in _text:
+                _string = item
+                _pattern = re.compile(r'var hq_str_\w+(\d{6})="(.+)";')
+                _result = _pattern.match(_string)
+                if _result is not None:
+                    code = _result[1]
+                    _info = _result[2]
+                    _datas = re.split(r'\.*,', _info)
+                    preclose_price = float(_datas[2])
+                    buy1_price = float(_datas[6])
+                    atime = datetime.datetime.now()
+                    if preclose_price is not None and preclose_price != 0:
+                        a_gains = (buy1_price - preclose_price) / preclose_price * 100
+                        if a_gains >= 8:
+                            cur_auction_insert = f"replace into auction(code,auction_date,auction_price,auction_gain) values('{code}','{atime}','{buy1_price}','{a_gains}')"
+                            cur_auction.execute(cur_auction_insert)
+                            cnx.commit()
 
-        cur_auction = cnx.cursor()
-        cur_auction_insert = "insert into auction(code,a_date,a_price,a_gains) values('%s','%s','%s','%f')"
-        time1 = '09:30:00'
-        for item in database_index:
-            time2 = datetime.datetime.now()
-            ctime2 = datetime.datetime.now().strftime("%H:%M:%S")
-            if ctime2 >= time1:
-                break;
-            code = item[0]
+        before_time = datetime.datetime.now().strftime("%H:%M:%S")
+        print(datetime.datetime.now())
+        sleep(60)
 
-            try:
-                url = 'https://hq.sinajs.cn/list=' + re.sub('[.]', '', code)
-                file = requests.get(url=url, headers=headers)
-                parts = file.text.split(',')
-                preclose_price = float(parts[2])
-                buy1_price = float(parts[6])
-                if preclose_price is not None and preclose_price != 0:
-                    a_gains = (buy1_price - preclose_price) / preclose_price * 100
-                    if a_gains >= 8:
-                        cur_auction.execute(cur_auction_insert % (code, time2, buy1_price, a_gains))
-                        cnx.commit()
-            except:
-                continue
+    cur_auction.close()
+    cur_indexs.close()
+    cnx.close()
+    print(datetime.datetime.now())
 
-        cur_index.close()
-        cnx.close()
-
-    bs.logout()
 
 def dojob():
     scheduler = BlockingScheduler()
-    scheduler.add_job(import_data,'cron',hour=9,minute=15)
+    scheduler.add_job(update_auction, 'cron', hour=9, minute=15)
     scheduler.start()
 
+
 dojob()
+
