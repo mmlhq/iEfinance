@@ -66,7 +66,7 @@ def update_data():
 
 
 def dojob():
-    scheduler = BlockingScheduler(timezone="Asia/Shanghai")
+    scheduler = BlockingScheduler(timezone="Asia/Shanghai", max_instance=20)
     scheduler.add_job(update_data, 'cron', hour=9, minute=15)
     scheduler.start()
 
