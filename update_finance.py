@@ -281,10 +281,10 @@ def dojob():
     scheduler.add_job(update_balance, 'cron', hour=16, minute=8)
     scheduler.add_job(update_growth, 'cron', hour=18, minute=8)
     scheduler.add_job(update_profit, 'cron', hour=20, minute=8)
-
+    scheduler.add_job(update_score, 'cron', hour=22, minute=8)
     scheduler.start()
 
-dojob()
+# dojob()
 # update_profit()
 # update_balance()
 # update_score()
