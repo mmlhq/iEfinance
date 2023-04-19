@@ -169,7 +169,7 @@ def get_base_info():  # 通过efinance模块更新KPI表的换手率、PER（市
         date = str(datetime.today().date())
         turn = row[8]
         PER = row[10]
-        turn_score = caculate_score('turn',turn, pd_level)
+        turn_score = caculate_score('turn', turn, pd_level)
         if PER == '-':
             PER_score = 0
         else:

@@ -243,7 +243,8 @@ def update_score():
     for item in balance_scores:
         code = item[0][3::]
         score = item[1]
-        update_sql = f"UPDATE `tdx`.`score` SET balance='{score}' where `code`='{code}'; "
+        bdate = datetime.today().date()
+        update_sql = f"UPDATE `tdx`.`score` SET balance='{score}',`date`='{bdate}' where `code`='{code}'; "
         cur_score.execute(update_sql)
         cnx.commit()
 
@@ -254,7 +255,8 @@ def update_score():
     for item in growth_scores:
         code = item[0][3::]
         score = item[1]
-        update_sql = f"UPDATE `tdx`.`score` SET growth='{score}' where `code`='{code}'; "
+        gdate = datetime.today().date()
+        update_sql = f"UPDATE `tdx`.`score` SET growth='{score}', `date`='{gdate}' where `code`='{code}'; "
         cur_score.execute(update_sql)
         cnx.commit()
 
@@ -265,7 +267,23 @@ def update_score():
     for item in profit_scores:
         code = item[0][3::]
         score = item[1]
-        update_sql = f"UPDATE `tdx`.`score` SET profit='{score}' where `code`='{code}'; "
+        pdate = datetime.today().date()
+        update_sql = f"UPDATE `tdx`.`score` SET profit='{score}',`date`='{pdate}' where `code`='{code}'; "
+        cur_score.execute(update_sql)
+        cnx.commit()
+
+    # 更新turn和PER得分
+    cur_turn_PER = cnx.cursor()
+    turn_PER_sql = "select b.`code`,b.turn,b.PER from tdx.KPI b " \
+                   "where (b.`code`,b.`date`) in (select `code`,max(`date`) from tdx.KPI group by `code`);"
+    cur_turn_PER.execute(profit_sql)
+    turn_PER_scores = cur_turn_PER.fetchall()
+    for item in turn_PER_scores:
+        code = item[0]
+        turn = item[1]
+        PER = item[2]
+        tdate = datetime.today().date()
+        update_sql = f"UPDATE `tdx`.`score` SET turn='{turn}',PER='{PER}',`date`='{tdate}' where `code`='{code}'; "
         cur_score.execute(update_sql)
         cnx.commit()
 
@@ -273,6 +291,7 @@ def update_score():
     cur_balance.close()
     cur_growth.close()
     cur_profit.close()
+    cur_turn_PER.close()
     cnx.close()
 
 
@@ -284,7 +303,5 @@ def dojob():
     scheduler.add_job(update_score, 'cron', hour=22, minute=8)
     scheduler.start()
 
-# dojob()
-# update_profit()
-# update_balance()
-# update_score()
+
+dojob()
