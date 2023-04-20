@@ -1,9 +1,6 @@
-import baostock as bs
 import pymysql
-import re
-from datetime import datetime
-from apscheduler.schedulers.blocking import BlockingScheduler
 import json
+
 
 def update_board_score():
 
@@ -27,5 +24,6 @@ def update_board_score():
     cur_index.close()
     cur_update.close()
     cnx.close()
+
 
 update_board_score()
