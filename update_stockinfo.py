@@ -171,15 +171,16 @@ def get_base_info():  # 通过efinance模块更新KPI表的换手率、PER（市
         PER = row[10]
         turn_score = caculate_score('turn', turn, pd_level)
         if PER == '-':
+            PER = 0
             PER_score = 0
         else:
             PER_score = caculate_score('PER', PER, pd_level)
-        replace_values.append(tuple([code, date, turn_score, PER_score]))
+        replace_values.append(tuple([code, date, turn, PER, turn_score, PER_score]))
 
     if replace_values:
         s = re.sub(r"\[", "", str(replace_values))
         s = re.sub(r"\)]", ");", s)
-        replace_values_str = f"replace into KPI(code,date,turn,PER) values{s}"
+        replace_values_str = f"replace into KPI(code,date,turn,PER,turn_score,PER_score) values{s}"
         cur_KPI.execute(replace_values_str)
         cnx.commit()
 

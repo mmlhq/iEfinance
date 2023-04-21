@@ -274,7 +274,7 @@ def update_score():
 
     # 更新turn和PER得分
     cur_turn_PER = cnx.cursor()
-    turn_PER_sql = "select b.`code`,b.turn,b.PER from tdx.KPI b " \
+    turn_PER_sql = "select b.`code`,b.turn_score,b.PER_score from tdx.KPI b " \
                    "where (b.`code`,b.`date`) in (select `code`,max(`date`) from tdx.KPI group by `code`);"
     cur_turn_PER.execute(profit_sql)
     turn_PER_scores = cur_turn_PER.fetchall()
