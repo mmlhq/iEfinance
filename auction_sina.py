@@ -93,5 +93,5 @@ def dojob():
     scheduler.start()
 
 
-dojob()
-
+# dojob()
+update_auction()

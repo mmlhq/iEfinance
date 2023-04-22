@@ -26,12 +26,12 @@ def update_auction():
     isTradeday = data_list[0][1]
 
     exist_code_list = []
-    if isTradeday == '0':  # 如果是交易日则执行
+    if isTradeday == '1':  # 如果是交易日则执行
         with open("config/config.json", encoding="utf-8") as f:
             cfg = json.load(f)
         info = cfg["mysql"]
 
-        limit_time = '23:50:00'
+        limit_time = '09:30:00'
         now_time = datetime.now().strftime("%H:%M:%S")
 
         cnx = pymysql.connect(user=info["user"], password=info["password"], host=info["host"],
@@ -71,5 +71,4 @@ def dojob():
     scheduler.start()
 
 
-# dojob()
-update_auction()
+dojob()
