@@ -11,9 +11,9 @@ from datetime import datetime
 from apscheduler.schedulers.blocking import BlockingScheduler
 
 
-def update_data():
-    df = ef.stock.get_realtime_quotes()
+def update_auction():
 
+    df = ef.stock.get_realtime_quotes()
     # 取出数据库当天的股票代码
     today = datetime.today().date()
 
@@ -26,18 +26,18 @@ def update_data():
     isTradeday = data_list[0][1]
 
     exist_code_list = []
-    if isTradeday == '1':  # 如果是交易日则执行
+    if isTradeday == '0':  # 如果是交易日则执行
         with open("config/config.json", encoding="utf-8") as f:
             cfg = json.load(f)
         info = cfg["mysql"]
 
-        limit_time = '12:40:00'
-        dtime = datetime.now()
+        limit_time = '23:50:00'
         now_time = datetime.now().strftime("%H:%M:%S")
 
+        cnx = pymysql.connect(user=info["user"], password=info["password"], host=info["host"],
+                              database=info["database"])
         while now_time < limit_time:
-            cnx = pymysql.connect(user=info["user"], password=info["password"], host=info["host"],
-                                  database=info["database"])
+            print(f"auction_efinance开始时间:{datetime.now()}")
             cur_today_index = cnx.cursor()
             index_today_sql = "select code from tdx.auction where left(auction_date,10)='%s';"
             cur_today_index.execute(index_today_sql % today)
@@ -57,20 +57,19 @@ def update_data():
                 # 写入数据库
                 cur_insert_auction.execute(insert_auction_sql)
                 cnx.commit()
-            after_time = datetime.now().strftime("%H:%M:%S")
-
             cur_insert_auction.close()
-            cnx.close()
             time.sleep(60)
+            print(f"auction_efinance结束时间:{datetime.now()}")
+
+        cnx.close()
     bs.logout()
 
 
 def dojob():
     scheduler = BlockingScheduler(timezone="Asia/Shanghai", max_instance=20)
-    scheduler.add_job(update_data, 'cron', hour=9, minute=15)
+    scheduler.add_job(update_auction, 'cron', hour=9, minute=15)
     scheduler.start()
 
 
-#dojob()
-
-update_data()
+# dojob()
+update_auction()

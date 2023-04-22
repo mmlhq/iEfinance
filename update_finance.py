@@ -230,6 +230,7 @@ def update_profit():
 
 
 def update_score():
+    print(f"update_score开始时间：{datetime.now()} ")
     with open("config/config.json", encoding="utf-8") as f:
         cfg = json.load(f)
     info = cfg["mysql"]
@@ -287,12 +288,19 @@ def update_score():
         cur_score.execute(update_sql)
         cnx.commit()
 
+    # 更新turn和PER得分
+    cur_total_score = cnx.cursor()
+    update_total_score = "update tdx.score set `total`= board+ concept+turn+PER+balance+growth+profit;"
+    cur_total_score.execute(update_total_score)
+    cnx.commit()
+
     cur_score.close()
     cur_balance.close()
     cur_growth.close()
     cur_profit.close()
     cur_turn_PER.close()
     cnx.close()
+    print(f"update_score结束时间：{datetime.now()} ")
 
 
 def dojob():

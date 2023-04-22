@@ -12,11 +12,11 @@ from datetime import datetime
 from apscheduler.schedulers.blocking import BlockingScheduler
 
 def caculate_score(target, value, pd_level):
-    pd_score = pd_level[(pd_level['target']==target) & (pd_level['high']>=value) & (pd_level['low']<value)]
+    pd_score = pd_level[(pd_level['target'] == target) & (pd_level['high'] >= value) & (pd_level['low'] < value)]
 
     if pd_score.empty:
         return 0
-    score = pd_score.iloc[0,4]
+    score = pd_score.iloc[0, 4]
     return float(score)
 
 def leveltable_to_df(cnx):
