@@ -6,7 +6,6 @@ import pymysql
 import re
 from datetime import datetime
 import pandas as pd
-import numpy as np
 from apscheduler.schedulers.blocking import BlockingScheduler
 import json
 
@@ -248,6 +247,7 @@ def update_score():
         update_sql = f"UPDATE `tdx`.`score` SET balance='{score}',`date`='{bdate}' where `code`='{code}'; "
         cur_score.execute(update_sql)
         cnx.commit()
+    cur_balance.close()
 
     cur_growth = cnx.cursor()
     growth_sql = "select b.code,b.score from tdx.growth b where (b.`code`,b.statDate) in (select `code`,max(statDate) from tdx.growth group by `code`);"
@@ -260,6 +260,7 @@ def update_score():
         update_sql = f"UPDATE `tdx`.`score` SET growth='{score}', `date`='{gdate}' where `code`='{code}'; "
         cur_score.execute(update_sql)
         cnx.commit()
+    cur_growth.close()
 
     cur_profit = cnx.cursor()
     profit_sql = "select b.code,b.score from tdx.profit b where (b.`code`,b.statDate) in (select `code`,max(statDate) from tdx.profit group by `code`);"
@@ -272,12 +273,13 @@ def update_score():
         update_sql = f"UPDATE `tdx`.`score` SET profit='{score}',`date`='{pdate}' where `code`='{code}'; "
         cur_score.execute(update_sql)
         cnx.commit()
+    cur_profit.close()
 
     # 更新turn和PER得分
     cur_turn_PER = cnx.cursor()
     turn_PER_sql = "select b.`code`,b.turn_score,b.PER_score from tdx.KPI b " \
                    "where (b.`code`,b.`date`) in (select `code`,max(`date`) from tdx.KPI group by `code`);"
-    cur_turn_PER.execute(profit_sql)
+    cur_turn_PER.execute(turn_PER_sql)
     turn_PER_scores = cur_turn_PER.fetchall()
     for item in turn_PER_scores:
         code = item[0]
@@ -287,18 +289,53 @@ def update_score():
         update_sql = f"UPDATE `tdx`.`score` SET turn='{turn}',PER='{PER}',`date`='{tdate}' where `code`='{code}'; "
         cur_score.execute(update_sql)
         cnx.commit()
+    cur_turn_PER.close()
 
-    # 更新turn和PER得分
+    # 更新主板得分
+    cur_index = cnx.cursor()
+    cur_index_sql = "select code,score from tdx.v_board_score;"
+    cur_index.execute(cur_index_sql)
+    items = cur_index.fetchall()
+    for item in items:
+        code = item[0]
+        score = item[1]
+        cur_update = cnx.cursor()
+        update_sql = f"update tdx.score set board = '{score}' where code='{code}';"
+        cur_update.execute(update_sql)
+        cnx.commit()
+    cur_index.close()
+
+    # 更新概念得分
+    cur_concept_score = cnx.cursor()
+    cur_index_concept = cnx.cursor()
+    index_concept_sql = f"select code,concept from tdx.index;"
+    cur_index_concept.execute(index_concept_sql)
+    items = cur_index_concept.fetchall()
+    for item in items:
+        code = item[0]
+        concepts = item[1].split(' ')
+        score = 0
+        for key in concepts:
+            sql_concept_score = f"select score from tdx.concept where `key`='{key}';"
+            cur_concept_score.execute(sql_concept_score)
+            _score = cur_concept_score.fetchone()
+            if _score is not None:
+                if _score[0] > score:
+                    score = _score[0]
+        cur_update = cnx.cursor()
+        update_sql = f"update tdx.score set concept = '{score}' where code='{code}';"
+        cur_update.execute(update_sql)
+        cnx.commit()
+    cur_concept_score.close()
+    cur_index_concept.close()
+
+    # 更新total（总分）
     cur_total_score = cnx.cursor()
     update_total_score = "update tdx.score set `total`= board+ concept+turn+PER+balance+growth+profit;"
     cur_total_score.execute(update_total_score)
     cnx.commit()
 
     cur_score.close()
-    cur_balance.close()
-    cur_growth.close()
-    cur_profit.close()
-    cur_turn_PER.close()
     cnx.close()
     print(f"update_score结束时间：{datetime.now()} ")
 
@@ -313,3 +350,4 @@ def dojob():
 
 
 dojob()
+# update_score()
