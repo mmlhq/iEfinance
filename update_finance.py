@@ -291,19 +291,19 @@ def update_score():
         cnx.commit()
     cur_turn_PER.close()
 
-    # 更新主板得分
-    cur_index = cnx.cursor()
-    cur_index_sql = "select code,score from tdx.v_board_score;"
-    cur_index.execute(cur_index_sql)
-    items = cur_index.fetchall()
-    for item in items:
-        code = item[0]
-        score = item[1]
-        cur_update = cnx.cursor()
-        update_sql = f"update tdx.score set board = '{score}' where code='{code}';"
-        cur_update.execute(update_sql)
-        cnx.commit()
-    cur_index.close()
+    # 更新主板得分，（2023-4-29：主板和概念行重叠对分值影响大，取消）
+    # cur_index = cnx.cursor()
+    # cur_index_sql = "select code,score from tdx.v_board_score;"
+    # cur_index.execute(cur_index_sql)
+    # items = cur_index.fetchall()
+    # for item in items:
+    #     code = item[0]
+    #     score = item[1]
+    #     cur_update = cnx.cursor()
+    #     update_sql = f"update tdx.score set board = '{score}' where code='{code}';"
+    #     cur_update.execute(update_sql)
+    #     cnx.commit()
+    # cur_index.close()
 
     # 更新概念得分
     cur_concept_score = cnx.cursor()
