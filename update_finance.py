@@ -349,5 +349,5 @@ def dojob():
     scheduler.start()
 
 
-dojob()
-# update_score()
+# dojob()
+update_score()
