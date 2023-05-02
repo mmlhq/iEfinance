@@ -71,7 +71,7 @@ def update_concept():
 
 def dojob():
     scheduler = BlockingScheduler()
-    scheduler.add_job(update_concept, 'cron', hour=15,minute=8)
+    scheduler.add_job(update_concept, 'cron', hour=15, minute=8)
     scheduler.start()
 
 
