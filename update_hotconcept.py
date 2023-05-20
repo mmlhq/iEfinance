@@ -61,8 +61,8 @@ def update_concept():
         turn = concept['f8']
         cpt = concept['f12']
         title = concept['f14']
-        if gain >= 0.05 and turn >= 0.03:
-            sql = f"replace into tdx.hotconcept(concept,title,`date`) values('{cpt}','{title}','{today}');"
+        if gain >= 3 and turn >= 2:
+            sql = f"replace into tdx.hotconcept(concept,title,`date`,gain,turn) values('{cpt}','{title}','{today}','{gain}','{turn}');"
             cur_concept.execute(sql)
             cnx.commit()
     cur_concept.close()
@@ -76,6 +76,7 @@ def dojob():
 
 
 dojob()
+
 
 
 

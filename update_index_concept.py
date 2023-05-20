@@ -1,82 +1,98 @@
-#-*- coding: UTF-8 -*-
-# 爬取东方财富网板块包含的股票，更新tdx.index2的concept列
-
+# -*- coding: UTF-8 -*-
+# 爬取东方财富网的板块信息，写入数据库
+import datetime
+import re
 import requests
 import json
+import random
 import pymysql
-import re
+import time
 
-url = "http://70.push2.eastmoney.com/api/qt/clist/get?"
-params = {
-    'cb': 'jQuery1124009280618077589997_1674265085449',
-    'pn': '1',
-    'pz': '1200',
-    'po': '1',
-    'np': '1',
-    'ut': 'bd1d9ddb04089700cf9c27f6f7426281',
-    'fltt': '2',
-    'invt': '2',
-    'wbp2u': '3990134558939926|0|1|0|web',
-    'fid': 'f3',
-    'fs': 'b:BK0552 f:!50',
-    'fields': 'f1,f2,f3,f4,f5,f6,f7,f8,f9,f10,f12,f13,f14,f15,f16,f17,f18,f20,f21,f23,f24,f25,f22,f11,f62,f128,f136,f115,f152,f45',
-    '_': '1674265085458'
-}
-headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, "
-                                 "like Gecko) Chrome/104.0.0.0 Safari/537.36"}
+def update_index_concept():
+    with open("config/config.json", encoding="utf-8") as f:
+        cfg = json.load(f)
+    info = cfg["mysql"]
+    cnx = pymysql.connect(user=info["user"], password=info["password"], host=info["host"],
+                          database=info["database"])
 
-with open("config/config.json", encoding="utf-8") as f:
-    cfg = json.load(f)
-info = cfg["mysql"]
-cnx = pymysql.connect(user=info["user"], password=info["password"], host=info["host"],
-                      database=info["database"])
-
-cur_indexs = cnx.cursor()
-cur_indexs_concept = "select concept from tdx.index2 where code='%s';";
-cur_indexs_update = "update index2 set concept='%s' where code='%s';"
-
-cur_concept = cnx.cursor()
-cur_concept_select = "select * from tdx.concept;";
-cur_concept.execute(cur_concept_select)
-tdx_concept = cur_concept.fetchall()
-
-for concept in tdx_concept:
-    params['fs'] =  'b:' + concept[0] + ' f:!50',
-    response = requests.get(url=url,headers=headers,params=params)
-    msg = response.content.decode("utf-8")
-    datas = re.findall('jQuery.+\((.+)\)',msg)
+    url = "https://push2.eastmoney.com/api/qt/clist/get?"
+    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/113.0.0.0 Safari/537.36 Edg/113.0.1774.42"}
+    params = {
+        'cb': 'jQuery112409605257827484568_1683038676894',
+        'pn': '1',
+        'pz': '450',
+        'po': '1',
+        'np': '1',
+        'ut': 'bd1d9ddb04089700cf9c27f6f7426281',
+        'fltt': '2',
+        'invt': '2',
+        'wbp2u': '|0|0|0|web',
+        'fid': 'f3',
+        'fs': 'm:90 t:3 f:!50',
+        'fields': 'f1,f2,f3,f4,f5,f6,f7,f8,f9,f10,f12,f13,f14,f15,f16,f17,f18,f20,f21,f23,f24,f25,f26,f22,f33,f11,f62,f128,f136,f115,f152,f124,f107,f104,f105,f140,f141,f207,f208,f209,f222',
+        '_': '1683038676895'
+    }
+    response = requests.get(url=url, headers=headers, params=params)
+    msg = response.content.decode()
+    datas = re.findall('jQuery.+\((.+)\)', msg)
     dict_datas = json.loads(datas[0])
-    total = dict_datas["data"]["total"]  # 属于concept的股票数量
-    try:
-        diffs = dict_datas['data']['diff']
-    except:
-        continue
+    concepts = dict_datas["data"]["diff"]
+    url2 = 'http://push2.eastmoney.com/api/qt/clist/get?'
+    params2 = {
+        'np': '1',
+        'fltt': '1',
+        'invt': '2',
+        'cb': 'jQuery35104649216960430329_1683821364661',
+        'fs': 'b:BK0847',
+        'fields': 'f14,f12,f13,f1,f2,f4,f3,f152',
+        'fid': 'f3',
+        'pn': '1',
+        'pz': '1000',
+        'po': '1',
+        'ut': 'fa5fd1943c7b386f172d6893dbfba10b',
+        'wbp2u': '| 0 | 0 | 0 | web',
+        '_': '1683821364662'
+    }
 
-    for diff in diffs:
-        #  f13: 0 深圳(sz) 1 上海(sh)， f12: 股票代码
-        if diff['f13'] == 0:
-            code = 'sz.'+diff['f12']
-        elif diff['f13'] == 1:
-            code = 'sh.'+diff['f12']
-        else:
-            continue
+    millis = int(round(time.time() * 1000))
+    expando = "jQuery" + ("3.5.1" + '{:.16f}'.format(random.random())).replace(".", "")
+    cb = expando + "_" + str(millis)
+    millis = int(round(time.time() * 1000))
+    _x = str(millis)
+    params2['cb'] = cb
+    params2['_'] = _x
 
-        # 在tdx中查找代码为code的股票,并在concept里添加所属信息
-        cur_indexs.execute(cur_indexs_concept%code)
-        index_concept = cur_indexs.fetchone()
-        if index_concept is None: # tdx里没有这个股票时
-            print(code)
-            continue
-        else:
-            if index_concept[0] is None:
-                concept_new = concept[1]
-            else:
-                concept_new = index_concept[0] + ' ' + concept[1]
-        cur_indexs.execute(cur_indexs_update%(concept_new,code))
+    for i, concept in enumerate(concepts):
+        BK_concept = concept['f12']
+        params2['fs'] = 'b:'+BK_concept
+        response2 = requests.get(url=url2, headers=headers, params=params2)
+        msg2 = response2.content.decode()
+        datas2 = re.findall('jQuery.+\((.+)\)', msg2)
+        dict_datas2 = json.loads(datas2[0])
+        indexs = dict_datas2["data"]["diff"]
+        for index in indexs:
+            code = index['f12']
+            sql_index_concpets = f"select concept from tdx.index where code='{code}';"
+            cur_index_concept = cnx.cursor()
+            cur_index_concept.execute(sql_index_concpets)
+            _index_concepts = cur_index_concept.fetchall()
+            try:
+                index_concepts = _index_concepts[0][0]
+            except:
+                continue
+            if index_concepts is None:
+                index_concepts = BK_concept
+            elif BK_concept not in index_concepts:
+                index_concepts = index_concepts + ' ' + BK_concept
+            update_concept_sql = f"update tdx.index set concept = '{index_concepts}' where code='{code}';"
+            cur_index_concept.execute(update_concept_sql)
         cnx.commit()
 
+    cur_index_concept.close()
+    cnx.close()
 
-cur_concept.close()
-cur_indexs.close()
-cnx.close()
+
+update_index_concept()
+
+
 
