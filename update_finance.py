@@ -313,7 +313,10 @@ def update_score():
     items = cur_index_concept.fetchall()
     for item in items:
         code = item[0]
-        concepts = item[1].split(' ')
+        if item[1] is not None:
+            concepts = item[1].split(' ')
+        else:
+            continue
         score = 0
         for key in concepts:
             sql_concept_score = f"select score from tdx.concept where `key`='{key}';"
@@ -349,5 +352,8 @@ def dojob():
     scheduler.start()
 
 
-# dojob()
-update_score()
+dojob()
+# update_balance()
+# update_growth()
+# update_profit()
+# update_score()
