@@ -34,7 +34,7 @@ def update_index_concept():
     }
     response = requests.get(url=url, headers=headers, params=params)
     msg = response.content.decode()
-    datas = re.findall('jQuery.+\((.+)\)', msg)
+    datas = re.findall('jQuery112409605257827484568_1683038676894\((.+)\)', msg)
     dict_datas = json.loads(datas[0])
     concepts = dict_datas["data"]["diff"]
     url2 = 'http://push2.eastmoney.com/api/qt/clist/get?'
@@ -67,7 +67,7 @@ def update_index_concept():
         params2['fs'] = 'b:'+BK_concept
         response2 = requests.get(url=url2, headers=headers, params=params2)
         msg2 = response2.content.decode()
-        datas2 = re.findall('jQuery.+\((.+)\)', msg2)
+        datas2 = re.findall(r'jQuery.+\((.+)\)', msg2)
         dict_datas2 = json.loads(datas2[0])
         indexs = dict_datas2["data"]["diff"]
         for index in indexs:

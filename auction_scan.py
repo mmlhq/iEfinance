@@ -25,7 +25,7 @@ pd = ef.stock.get_latest_quote(stock_codes)
 codes = pd["代码"]
 print(type(codes))
 
-data = pd[pd["代码"]=="002616"].head()
+data = pd[pd["代码"] == "002616"].head()
 
 open_price = data["今开"].values[0]
 yesterday_price = data["昨日收盘"].values[0]

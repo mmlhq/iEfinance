@@ -5,6 +5,8 @@ import re
 import requests
 import json
 import pymysql
+import math
+import random
 
 with open("config/config.json", encoding="utf-8") as f:
     cfg = json.load(f)
@@ -17,7 +19,11 @@ cur_concept_select = "select title from tdx.concept;";
 cur_concept.execute(cur_concept_select)
 tdx_concept = cur_concept.fetchall()
 
-url = "http://65.push2.eastmoney.com/api/qt/clist/get?"
+# var url = "http://" + Math.floor(Math.random()*100+1) +  ".push2.eastmoney.com/api/qt/clist/get";
+# tsApi:"//"+(Math.floor(Math.random() * 99) + 1)+".push2.eastmoney.com/"
+url = "http://" + str(math.floor(random.random()*99)+1) + ".push2.eastmoney.com/api/qt/clist/get?"
+
+# url = "http://65.push2.eastmoney.com/api/qt/clist/get?"
 headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, "
                                  "like Gecko) Chrome/104.0.0.0 Safari/537.36"}
 params = {
@@ -38,7 +44,12 @@ params = {
 
 response = requests.get(url=url, headers=headers, params=params)
 msg = response.content.decode()
-datas = re.findall('jQuery.+\((.+)\)', msg)
+
+pattern = re.compile(r'jQuery.{36}(.+)\);')
+datas = pattern.findall(msg)
+# datas = re.search(r'jQuery.+\((.+)\)', msg)
+
+print(datas)
 
 cur_concept_insert = "insert into concept(`key`,`title`) values('%s','%s');"
 dict_datas = json.loads(datas[0])

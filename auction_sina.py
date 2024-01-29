@@ -7,6 +7,8 @@ import json
 import re
 import pandas as pd
 import baostock as bs
+from apscheduler.schedulers.blocking import BlockingScheduler
+
 def combine(code):
     match code[:1]:
         case '0' | '3':
@@ -17,7 +19,6 @@ def combine(code):
             return 'bj' + code
         case _:
             return
-from apscheduler.schedulers.blocking import BlockingScheduler
 
 def update_auction():
     with open("config/config.json", encoding="utf-8") as f:
@@ -34,7 +35,7 @@ def update_auction():
 
     nums = 800  # 一次读取的数据
     headers = {'Referer': 'https://finance.sina.com.cn'}
-    limit_time = '09:30:00'
+    limit_time = '23:30:00'
     before_time = datetime.datetime.now().strftime("%H:%M:%S")
     cur_auction = cnx.cursor()
     print(datetime.datetime.now())
@@ -49,8 +50,8 @@ def update_auction():
 
     isTradeday = data_list[0][1]
 
-    if isTradeday != "1":
-        return
+    # if isTradeday != "1":
+    #     return
 
     while before_time < limit_time:
         for i in range(0, len(code_list), nums):
