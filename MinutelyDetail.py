@@ -6,9 +6,6 @@ import random
 from loguru import logger
 import pymysql
 import datetime
-import pandas as pd
-from io import StringIO
-from sqlalchemy import create_engine
 
 def _get_market_code(stock_code):
     """
@@ -54,10 +51,8 @@ def get_minutely_data(code: str) -> dict:
     """
     # url格式，需要调用者依次填充：市场代码（0：深圳，0：上海），股票代码，日期窗口
     url_format = "https://" + str(math.floor(random.random() * 99) + 1) + \
-                 ".push2.eastmoney.com/api/qt/stock/trends2/sse?fields1=f1,f2,f3,f4,f5,f6,f7,f8," \
-                 "f9,f10,f11,f12,f13,f14,f17&fields2=f51,f52,f53,f54,f55,f56,f57," \
-                 "f58&mpi=1000&ut=fa5fd1943c7b386f172d6893dbfba10b&secid={market}.{code}" \
-                 "&ndays={days}&iscr=0&iscca=0&wbp2u=1849325530509956|0|1|0|web"
+                 ".push2.eastmoney.com/api/qt/stock/details/sse?fields1=f1,f2,f3,f4&fields2=f51,f52,f53,f54,f55" \
+                 "&mpi=2000&ut=bd1d9ddb04089700cf9c27f6f7426281&fltt=2&pos=-0&secid={market}.{code}&wbp2u=3990134558939926|0|1|0|web"
 
     url = url_format.format(market=_get_market_code(code), code=code, days=1)  # 请求url
     headers = {
@@ -78,31 +73,6 @@ def get_minutely_data(code: str) -> dict:
                 data = _handle_event(parts[0])
                 return json.loads(data)
 
-def data_to_data_frame(data: dict) -> pd.DataFrame:
-    try:
-        trends = data["data"]["trends"]
-        trends_str = json.dumps(trends)
-        trend_csv_content = 'Time,Open,Close,High,Low,Volume,Amount,Average\n'
-        trend_csv_content += trends_str.replace("\", \"", "\n").strip("\"[]")
-        # logger.info(f"trends_str:\n{trend_csv_content}")
-
-        type_mapping = {
-            "Open": float,
-            "High": float,
-            "Low": float,
-            "Close": float,
-            "Volume": float,
-            "Amount": float,
-            "Average": float
-        }
-        df_data = pd.read_csv(
-            StringIO(trend_csv_content), delimiter=',', dtype=type_mapping,
-            parse_dates=['Time'], index_col='Time')
-        # logger.info(f"df_data: {df_data}")
-        return df_data
-    except Exception as e:
-        logger.error(f"异常：{e}")
-        return None
 
 if __name__ == "__main__":  # 测试代码
 
@@ -122,21 +92,13 @@ if __name__ == "__main__":  # 测试代码
         print(f"开始时间:{datetime.datetime.now()}")
         code = tindex[0]
         datas = get_minutely_data(code)
-        cells = datas['data']['trends']
+        cells = datas['data']['details']
         print(f"正在写入:{code}")
         for cell in cells:
-            rdatetime = cell.split(",")[0]
-            date = rdatetime.split(" ")[0]
-            time = rdatetime.split(" ")[1]
-            open = cell.split(',')[1]
-            high = cell.split(',')[2]
-            low = cell.split(',')[3]
-            close = cell.split(',')[4]
-            volume = cell.split(',')[5]
-            amount = cell.split(',')[6]
-            average = cell.split(',')[7]
-
-            cur_minute_sql = f"insert into MinutelyData(`code`,`date`,`time`,`open`,`high`,`low`,`close`,`volume`,`amount`,`average`) values('{code}','{date}','{time}',{open},{high},{low},{close},{volume},{amount},{average}) "
+            time = cell.split(',')[0]
+            price = cell.split(',')[1]
+            volume = cell.split(',')[2]
+            cur_minute_sql = f"insert into MinutelyData(`code`,`date`,`time`,`price`,`volume`) values('{code}','{date}','{time}',{price},{volume}) "
             cur_minute.execute(cur_minute_sql)
 
         cnx.commit()
