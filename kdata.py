@@ -36,7 +36,7 @@ def put_kdata():
         # 周月线指标：date,code,open,high,low,close,volume,amount,adjustflag,turn,pctChg
         rs = bs.query_history_k_data_plus(code,
             "date,code,open,high,low,close,preclose,volume,amount,adjustflag,turn,tradestatus,pctChg,peTTM,pbMRQ,psTTM,pcfNcfTTM,isST",
-            start_date='2024-03-22', end_date='2024-03-22',
+            start_date='2024-03-25', end_date='2024-03-25',
             frequency="d", adjustflag="3")
 
             #### 打印结果集 ####
